@@ -1,0 +1,25 @@
+{
+  "name": "lumitra",
+  "description": "Lumitra plugins for agents: brand- and character-consistent image and video generation.",
+  "owner": {
+    "name": "Marlin Jai Pohl",
+    "url": "https://lumitra.co"
+  },
+  "plugins": [
+    {
+      "name": "lumitra-studio",
+      "source": "./",
+      "version": "0.1.0",
+      "description": "Generate brand-consistent images and video with Lumitra Studio: batch image generation, 7-view character minting, brand reference libraries, the still-swap plus image-to-video recipe, workflow authoring, and published recipes.",
+      "author": {
+        "name": "Marlin Jai Pohl",
+        "url": "https://lumitra.co"
+      },
+      "homepage": "https://studio.lumitra.co",
+      "repository": "https://github.com/marlinjai/lumitra-studio-plugin",
+      "license": "MIT",
+      "keywords": ["image-generation", "video-generation", "character-consistency", "brand", "mcp", "lumitra"],
+      "skills": ["./skills/lumitra-studio", "./skills/video-motion-analysis"]
+    }
+  ]
+}

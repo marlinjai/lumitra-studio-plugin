@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "lumitra-studio": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@marlinjai/studio-mcp"],
+      "env": {
+        "LUMITRA_STUDIO_API_KEY": "${LUMITRA_STUDIO_API_KEY}",
+        "LUMITRA_STUDIO_BASE_URL": "${LUMITRA_STUDIO_BASE_URL}"
+      }
+    }
+  }
+}

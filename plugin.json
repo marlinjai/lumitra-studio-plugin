@@ -1,0 +1,41 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "lumitra-studio",
+  "version": "0.1.0",
+  "description": "Generate brand-consistent images and video with Lumitra Studio: batch image generation, 7-view character minting, brand references, the still-swap plus image-to-video recipe for putting a cast character into footage, authoring workflows through the command model, and running published recipes. Ships the lumitra-studio skill, the video-motion-analysis skill for reading real footage motion and verifying generated clips, and the studio-mcp server.",
+  "author": {
+    "name": "Marlin Jai Pohl / Lumitra",
+    "url": "https://lumitra.co"
+  },
+  "homepage": "https://studio.lumitra.co",
+  "repository": "https://github.com/marlinjai/lumitra-studio",
+  "license": "UNLICENSED",
+  "keywords": [
+    "lumitra",
+    "image-generation",
+    "video-generation",
+    "character-consistency",
+    "brand",
+    "mcp",
+    "nano-banana",
+    "video",
+    "motion-analysis"
+  ],
+  "extensions": {
+    "co.lumitra.studio": {
+      "skills": [
+        "lumitra-studio",
+        "video-motion-analysis"
+      ],
+      "mcpServers": [
+        "lumitra-studio"
+      ],
+      "requiredEnv": [
+        "LUMITRA_STUDIO_API_KEY"
+      ],
+      "optionalEnv": [
+        "LUMITRA_STUDIO_BASE_URL"
+      ]
+    }
+  }
+}
