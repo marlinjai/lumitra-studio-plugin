@@ -1,11 +1,11 @@
 ---
 name: lumitra-studio
-description: Generate brand-consistent images and video through Lumitra Studio (studio.lumitra.co). Batch prompts to images, mint characters as 7-view identity sheets, create brands with reference images, put a cast character into video with the still-swap plus image-to-video recipe, and run published recipes (a workflow plus automatic follow-up like character creation). Use when the user wants bulk image generation, a consistent recurring character, branded visuals, AI b-roll, a person replaced in a video clip, or to run a named recipe by slug. Works through the studio_* MCP tools or the HTTP API with LUMITRA_STUDIO_API_KEY.
+description: Generate brand-consistent images and video through Lumitra Studio (studio.lumitra.co). Batch prompts to images, mint characters as 7-view identity sheets, create brands with reference images, replace a person in an image or video clip with a cast character (routed by mode, analyzed before any spend, honest about what the still-swap route cannot preserve), and run published recipes (a workflow plus automatic follow-up like character creation). Use when the user wants bulk image generation, a consistent recurring character, branded visuals, AI b-roll, a person replaced in a video clip, or to run a named recipe by slug. Works through the studio_* MCP tools or the HTTP API with LUMITRA_STUDIO_API_KEY.
 license: UNLICENSED
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 18+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.1.0"
+  version: "0.2.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -59,7 +59,7 @@ Never print the key, never paste it into a prompt, never commit it. Every genera
 | `studio_get_run` | Poll a run: overall status plus per-node status and cost. A run parked on a person comes back with a `waiting` block instead of more polling (see below). |
 | `studio_decide_judge` | Pass a PERSON'S approve/reject on to a parked judge node. Never your own judgement. |
 | `studio_get_run_output` | Fresh signed URL for one node's result (`runId`, `nodeId`). |
-| `studio_replace_character_in_video` | The packaged video recipe: scene frame plus character reference, swap in a still, animate it. Returns a `runId` to poll with `studio_get_run`. |
+| `studio_replace_character_in_video` | The packaged video route: scene frame plus character reference, swap in a still, animate it. Pass an explicit `swapPrompt` (see "Character replacement"). Returns a `runId` to poll with `studio_get_run`. |
 | `studio_get_spend` | Report what a session or time window cost. Call it at the end of any batch and tell the user the number. |
 | `studio_get_usage` | Check the organization's monthly cap, per-minute rate limit and month-to-date spend before a large batch, or after a `402`/`429` to see what tripped. `usedUsd` includes in-flight (not yet settled) job estimates and can go DOWN as well as up when one fails, this is not a bug. |
 | `studio_workflow_describe` | Learn the node vocabulary before authoring: task types with ports and prompt policy, input types, op types, patch limits. Add `includeModels: true` to pick a model id. |
@@ -138,27 +138,34 @@ POST /api/brands/{slug}/library/upload  multipart: file, category (mood|style|id
 
 Same via `studio_create_brand` and `studio_upload_brand_reference`. After that, pass `brandSlug` (and optionally `brandMode`) on any generation and the Studio applies the style and attaches the references. Keep a brand library small and on-style: five strong references beat thirty mixed ones.
 
-## Video with a cast character: the recipe that works
+## Character replacement (images and video)
 
-Do NOT use video-to-video character swap (Wan-2.2 Animate Replace and the products that wrap it) on real footage that is dark, handheld, motion-blurred, or has hand-tool interaction. It warps faces and limbs; in testing every such shot was unusable. Use the still-first recipe instead:
+Goal: the result should look as though the original camera recorded the replacement character doing the original action. Prompt prose cannot guarantee that; the steps below make the constraints explicit and route each one to the stage that can actually enforce it. Load `references/character-replacement.md` for the full tables, the analysis record shape, the prompt templates and the review checks.
 
-1. **Swap the person in a STILL.** `image-edit` node on `fal/nano-banana-2-edit`, `inputImages: [scene_frame_url, character_reference_url]`, prompt: "replace the person with the person from the second image, keep everything else identical: framing, lighting, clothing fit, background".
-2. **Animate the still.** `image-to-video` node with `inputImageUrl` bound to the edit node's output. `fal/seedance-pro-image-to-video` (about $0.62 per 5 s at 1080p) or `fal/kling-v2-5-image-to-video` ($0.35 base; supports start AND end keyframes, so swap first and last frame for longer shots to kill drift).
-3. **Finish outside the Studio.** Conform fps, upscale 2x if needed, re-grain and grade (dark grading hides artifacts). Keep generated cuts at 4 s or less. Budget 2 to 3 takes per shot.
+1. **Pick the mode first.** Source-matched replacement (change the person, keep everything else), creative restyling (deliberately change the look), or new scene generation (nothing to preserve). Realism vocabulary like haze, grain, visible pores or a mood palette belongs to the last two, and only where it fits; it is not a default for a replacement.
+2. **Declare the scope and who owns each attribute.** Identity comes from the character references. Pose, expression, gaze, timing, lighting, focus, motion blur, camera, background and other people come from the footage. Clothing and props come from the footage unless the user assigns them to a reference. Body proportions follow the declared scope: identity-only keeps the source body; full-body takes the character's, which changes the silhouette, so the background behind the old body must be reconstructed and every contact point re-derived. When the request does not say which, ask before spending anything.
+3. **Analyze before generating.** Sample the whole shot, not just its first and last frame: add frames at head turns, occlusions, hand contacts, lighting changes and focus pulls. Record observations separately from guesses, leave unknowns unknown, and never invent camera numbers (a single frame does not reveal aperture or focus distance; "stops out of focus" is not a unit). Give each constraint an owner: prompt, model control, compositing, or human review.
+4. **Say honestly what the route can do.** Studio has no source-video editor today (a model that edits the original clip and keeps its real motion). The route it has is a still swap then image-to-video, which REGENERATES the motion between the frames rather than preserving it. When the original performance must survive exactly, tell the user this route cannot guarantee it before spending.
+   - Swap the person in a still: `image-edit` on `fal/nano-banana-2-edit`, `inputImages: [scene_frame_url, character_reference_url]`.
+   - Animate: `image-to-video`. `fal/kling-v2-5-image-to-video` takes a start and an end frame (swap both for shots longer than about 3 seconds to limit drift); the FLUX.3 keyframes tier pins up to ten swapped frames, which constrains the regenerated motion more tightly but still does not preserve it.
+   - Do NOT use video-to-video character swap through Wan 2.2 Animate Replace (and the products that wrap it) on dark, handheld, motion-blurred footage or footage with hand-tool contact: it warped faces and limbs on every such shot tested.
+5. **Write a short, specific prompt.** The requested change and exact target first, each reference's role, then the few preservation constraints most likely to fail in this shot, as concrete relationships ("keep the open door in front of his body; match the face's original softness"). Never append a realism suffix ("photorealistic, ultra-detailed, no artifacts"), and never promise physics in prose ("keep every pixel identical"): the model cannot guarantee it, and "tack-sharp" is exactly how a deliberately defocused subject comes back wrong.
+6. **Inspect the keyframe before paying for video.** Check identity, pose, accessories, focus, lighting and edges on the swapped still first. Budget one candidate plus two retries per shot, retrying from the source rather than re-editing a degraded output, and classify each failure before retrying: a blurred edge is a compositing fix, not a re-render.
+7. **Finish outside Studio.** Studio does not composite. Keep untouched pixels by compositing the replacement onto the original frame through a mask, then match blur, grain and colour to the source. Conform the frame rate, keep generated cuts at 4 seconds or less, and do not add a film look to clean digital footage.
 
-`studio_replace_character_in_video` wraps steps 1 and 2 and waits by default: `{ projectId, sceneFrameUrl, characterSlug (or characterReferenceUrl), endFrameUrl?, swapPrompt?, motionPrompt?, videoModel?, visibility?, waitSeconds? }` -> `{ runId, status, stillUrl, videoUrl, costUsd, videoModel }`. Without `endFrameUrl` it animates from the single swapped still with `fal/seedance-pro-image-to-video`; with `endFrameUrl` (a second, approved keyframe) it switches to `fal/kling-v2-5-image-to-video` and interpolates between both frames, which is the recommended path for shots longer than ~3 seconds: have the human approve the first and last swapped frames (`stillNodeId: "edit"`), then run the video node. Fetch the clip later with `studio_get_run_output` for node `video`.
+`studio_replace_character_in_video` packages steps 4 and 5 and waits by default: `{ projectId, sceneFrameUrl, characterSlug (or characterReferenceUrl), endFrameUrl?, swapPrompt?, motionPrompt?, videoModel?, visibility?, waitSeconds? }` -> `{ runId, status, stillUrl, videoUrl, costUsd, videoModel }`. **Always pass an explicit `swapPrompt` composed for the shot:** the tool's built-in default still carries a realism suffix and a pixel-identical promise. Without `endFrameUrl` it animates the single swapped still with `fal/seedance-pro-image-to-video`; with `endFrameUrl` (a second approved keyframe) it switches to `fal/kling-v2-5-image-to-video` and interpolates between both frames: have the human approve both swapped frames (`stillNodeId: "edit"`), then run the video node. Fetch the clip with `studio_get_run_output` for node `video`.
 
-Inline definition if you run it yourself with `studio_run_workflow`:
+Inline definition if you run it yourself with `studio_run_workflow` (the swap prompt is an example for a defocused, identity-only shot; compose your own from the analysis):
 
 ```json
 {
   "nodes": [
     { "id": "edit", "task": "image-edit", "model": "fal/nano-banana-2-edit",
-      "inputs": { "inputImages": { "kind": "literal", "value": ["<scene_frame_url>", "<character_full_body_url>"] },
-                  "prompt": { "kind": "literal", "value": "replace the person with the person from the second image, keep everything else identical" } } },
-    { "id": "video", "task": "image-to-video", "model": "fal/seedance-pro-image-to-video",
+      "inputs": { "inputImages": { "kind": "literal", "value": ["<scene_frame_url>", "<character_reference_url>"] },
+                  "prompt": { "kind": "literal", "value": "Replace the selected mechanic's identity with the person in the second image. Preserve his cap, glasses, work clothes, head angle, expression and tool grip. Keep the open door in front of his body. Match the original face's soft focus and the scene's lighting and colour." } } },
+    { "id": "video", "task": "image-to-video", "model": "fal/kling-v2-5-image-to-video",
       "inputs": { "inputImageUrl": { "kind": "ref", "node": "edit", "path": "url" },
-                  "prompt": { "kind": "literal", "value": "subtle natural motion, camera static" } } }
+                  "prompt": { "kind": "literal", "value": "keep the original camera and the subject's original movement" } } }
   ]
 }
 ```
