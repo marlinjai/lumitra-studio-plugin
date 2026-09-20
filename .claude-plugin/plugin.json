@@ -1,7 +1,7 @@
 {
   "name": "lumitra-studio",
   "description": "Generate brand-consistent images and video with Lumitra Studio: batch image generation, 7-view character minting, brand reference libraries, the still-swap plus image-to-video recipe for putting a cast character into footage, workflow authoring, and published recipes.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Marlin Jai Pohl",
     "url": "https://lumitra.co"

@@ -9,7 +9,7 @@
   },
   "homepage": "https://studio.lumitra.co",
   "repository": "https://github.com/marlinjai/lumitra-studio",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "keywords": [
     "lumitra",
     "image-generation",

@@ -1,8 +1,8 @@
 ---
 name: lumitra-studio
 description: Generate brand-consistent images and video through Lumitra Studio (studio.lumitra.co). Batch prompts to images, mint characters as 7-view identity sheets, create brands with reference images, replace a person in an image or video clip with a cast character (routed by mode, analyzed before any spend, honest about what the still-swap route cannot preserve), and run published recipes (a workflow plus automatic follow-up like character creation). Use when the user wants bulk image generation, a consistent recurring character, branded visuals, AI b-roll, a person replaced in a video clip, or to run a named recipe by slug. Works through the studio_* MCP tools or the HTTP API with LUMITRA_STUDIO_API_KEY.
-license: UNLICENSED
-compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 18+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
+license: MIT
+compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
   version: "0.2.0"
