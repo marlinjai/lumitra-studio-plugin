@@ -17,7 +17,7 @@ The plugin is free. Generations are metered on your own Studio API key at provid
 ## Prerequisites
 
 - A Lumitra Studio account and an API key. Keys are self-serve and tenant-scoped, issued by [auth-brain](https://auth.lumitra.co) (Studio's identity provider), not by Studio itself: sign in at auth.lumitra.co, open your organization, and create a key under API Keys. Your organization also needs the `studio` app grant, which the Lumitra team enables during onboarding.
-- Node.js 18+ (the MCP server is started with `npx -y @marlinjai/studio-mcp`).
+- Node.js 20+ (the MCP server is started with `npx -y @marlinjai/studio-mcp`).
 - For the batch script only: `bash`, `curl`, `jq`.
 
 Export the key in the environment that launches your agent client:
@@ -121,4 +121,4 @@ Issues and questions about the plugin are welcome here.
 - Studio: https://studio.lumitra.co
 - Agent Plugins spec: https://agent-plugins.org/specification
 - Agent Skills spec: https://agentskills.io/specification
-- MCP server package: `@marlinjai/studio-mcp` (source in `packages/studio-mcp` of this repo)
+- MCP server package: [`@marlinjai/studio-mcp`](https://www.npmjs.com/package/@marlinjai/studio-mcp) (source lives in the private Lumitra Studio repository, not this mirror)
