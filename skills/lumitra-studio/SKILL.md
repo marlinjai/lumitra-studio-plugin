@@ -28,7 +28,7 @@ export LUMITRA_STUDIO_API_KEY="..."          # required
 export LUMITRA_STUDIO_BASE_URL="https://studio.lumitra.co"   # optional, this is the default
 ```
 
-Never print the key, never paste it into a prompt, never commit it. Every generation is metered on it, against the tenant's plan (a monthly USD cap and a per-minute rate limit, both optional): a `402` means the monthly cap is reached (the body carries `capUsd`, `usedUsd`, `resetsAt`), a `429` means the rate limit is hit (retry after the `Retry-After` header). Call `studio_get_usage` to check remaining budget before a large batch, or after either error to see what tripped. A `401` or `403` means the key is missing, invalid or revoked; stop and tell the user rather than retrying.
+Never print the key, never paste it into a prompt, never commit it. Every generation is metered on it, against the tenant's plan: a monthly USD cap and an optional per-minute rate limit. An organization without a plan of its own is held to a default monthly cap of 20 USD; only a plan the Lumitra operator set can be unlimited. A `402` with `code: "monthly_cap_reached"` means the monthly cap is reached: its `error` is a sentence to relay to the user as is (it names the reset date and says to ask the Lumitra operator, hello@lumitra.co, to raise the limit), and the body also carries `capUsd`, `usedUsd` and `resetsAt`. Do not retry a `402` before `resetsAt`. A `429` means the rate limit is hit (retry after the `Retry-After` header). Call `studio_get_usage` to check remaining budget before a large batch, or after either error to see what tripped. A `401` or `403` means the key is missing, invalid or revoked; stop and tell the user rather than retrying.
 
 ## Concepts
 
@@ -41,7 +41,7 @@ Never print the key, never paste it into a prompt, never commit it. Every genera
 | **Workflow** | A small graph of nodes (`generate-image`, `image-edit`, `image-to-video`, ...). Each node becomes a Job. Runs return per-node result URLs. This is how multi-step recipes (swap then animate) execute server-side. |
 | **Published recipe** | A workflow frozen under a stable public slug, optionally with a declared list of post-run effects (create a character, attach a reference). Run it by slug with `studio_run_published`; the effects fire automatically only if every node succeeds. See "Published recipes" below. |
 | **Spend** | A ledger of every Job's `costUsd`. `studio_get_spend` reads it. |
-| **Plan / usage** | Your organization's monthly USD cap and per-minute rate limit (either may be unset = unlimited), and month-to-date spend against them; a generation call fails with `402`/`429` once either is hit (see "Credentials" above). `studio_get_usage` reads the current state. |
+| **Plan / usage** | Your organization's monthly USD cap (20 USD by default; only an operator-set plan is unlimited) and per-minute rate limit (unset = none), and month-to-date spend against them; a generation call fails with `402`/`429` once either is hit (see "Credentials" above). `studio_get_usage` reads the current state. |
 
 ## MCP tools and when to use each
 
