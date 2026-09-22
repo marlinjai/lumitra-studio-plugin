@@ -16,7 +16,7 @@ The plugin is free. Generations are metered on your own Studio API key at provid
 
 ## Prerequisites
 
-- A Lumitra Studio account and an API key. Keys are self-serve and tenant-scoped, issued by [auth-brain](https://auth.lumitra.co) (Studio's identity provider), not by Studio itself: sign in at auth.lumitra.co, open your organization, and create a key under API Keys. Your organization also needs the `studio` app grant, which the Lumitra team enables during onboarding.
+- A Lumitra Studio account and an API key. Keys are self-serve and tenant-scoped, issued by [auth-brain](https://auth.lumitra.co) (Studio's identity provider), not by Studio itself: sign in at auth.lumitra.co, open your organization, and create a key under API Keys. Your company also needs Studio enabled: on the apps page at auth.lumitra.co, an owner or admin of the company chooses **Request access** on the Lumitra Studio card, and you get an email once it is enabled. A key works before that, but Studio refuses its calls until the company is enabled.
 - Node.js 20+ (the MCP server is started with `npx -y @marlinjai/studio-mcp`).
 - For the batch script only: `bash`, `curl`, `jq`.
 
