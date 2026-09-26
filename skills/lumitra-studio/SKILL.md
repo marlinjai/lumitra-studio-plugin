@@ -49,7 +49,6 @@ Never print the key, never paste it into a prompt, never commit it. Every genera
 |---|---|
 | `studio_list_projects` | Resolve the `projectId` you need for characters, workflows and runs. Call once, cache the id. |
 | `studio_generate_image` | One prompt to one image job. Args: `prompt`, optional `brandSlug`, `brandMode`, `aspectRatio`, `model`, `projectId`. Returns `jobId`. |
-| `studio_generate_3d` | One prompt, or one image (`imageUrl`), to one 3D model (a textured GLB mesh) through 3D AI Studio. Optional `model` (text: Tripo 3.1, Hunyuan Rapid or Pro; image: TRELLIS.2, Tripo 3.1), `options` quality flags that each change the price, `projectId`. Waits by default (one to five minutes) and returns the GLB `url` and `costUsd`. |
 | `studio_get_job` | Poll a `jobId` until terminal. Returns status, `costUsd`, `errorMessage`, `resultAsset.url`. |
 | `studio_list_characters` / `studio_get_character` | Find an existing character and its reference URLs (you need the `full-body` or `face` URL for video swaps). |
 | `studio_create_character` | Register a character row: `name`, `slug`, `descriptorPrompt`, optional `negativePrompt`, `defaultModel`. Does not generate images. |
