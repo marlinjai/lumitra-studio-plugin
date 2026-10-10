@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.2.0"
+  version: "0.3.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -29,6 +29,18 @@ export LUMITRA_STUDIO_BASE_URL="https://studio.lumitra.co"   # optional, this is
 ```
 
 Never print the key, never paste it into a prompt, never commit it. Every generation is metered on it, against the tenant's plan: a monthly USD cap and an optional per-minute rate limit. An organization without a plan of its own is held to a default monthly cap of 20 USD; only a plan the Lumitra operator set can be unlimited. A `402` with `code: "monthly_cap_reached"` means the monthly cap is reached: its `error` is a sentence to relay to the user as is (it names the reset date and says to ask the Lumitra operator, hello@lumitra.co, to raise the limit), and the body also carries `capUsd`, `usedUsd` and `resetsAt`. Do not retry a `402` before `resetsAt`. A `429` means the rate limit is hit (retry after the `Retry-After` header). Call `studio_get_usage` to check remaining budget before a large batch, or after either error to see what tripped. A `401` or `403` means the key is missing, invalid or revoked; stop and tell the user rather than retrying.
+
+## First five minutes
+
+A new organization starts empty. These three steps take it to one finished image and a known cost. They are the same three the Home dashboard at studio.lumitra.co walks a person through, so an agent and a person arrive at the same place. Before the first step, call `studio_list_projects` once: it proves the key works and lists the organization's projects (for a new organization that is usually one, slug `default`).
+
+1. **Set up a brand, or skip.** A brand (a style prefix plus reference images) is optional in the Studio, and creating one is free. Over HTTP you can skip it: `POST /api/generate` with only a `prompt` starts an unbranded image job. On the Model Context Protocol (MCP) path the `studio_generate_image` tool requires a `brandSlug`, so create a brand first with `studio_create_brand` (a `name` and a `slug` are enough; add a `stylePrefix` when the user has a style in mind).
+2. **Make one image.** Call `studio_generate_image` with that `brandSlug` and a `prompt`. This is the first call that spends money. It waits by default and returns the signed image `url` and `costUsd`; with `wait: false` it returns a `jobId` to poll with `studio_get_job`. The HTTP call behaves like `wait: false`: it answers `{ "jobId", "kind" }` and the image arrives by polling `GET /api/v1/jobs/{jobId}`. If the job ends `failed`, report its `errorMessage` and retry at most once. A failed job normally adds nothing to the organization's spend; trust its `costUsd` over that rule, because a job that fails after an earlier attempt of it succeeded keeps that attempt's cost, and the spend ledger counts it.
+3. **See what it cost.** Tell the user the job's `costUsd`, then call `studio_get_spend` and show the total: it is the same ledger a person sees in the wallet at the top of every Studio page. `studio_get_usage` shows how much of the monthly cap is left.
+
+Where the first image lands: `studio_generate_image` sends the `brandSlug` and no `projectId`, and the Studio files such a job under the project whose slug equals the brand slug, creating that project on first use. So the image from step 2 is in a project named after the brand, not in `default`; call `studio_list_projects` again to see it. Over HTTP, a call with neither `brandSlug` nor `projectId` lands in `default`, and a `projectId` in the body always wins. Spend is counted for the whole organization whichever project a job is in.
+
+Stop there and ask what to make next. Minting a character, a batch or any video costs more, and each of those has its own section below.
 
 ## Concepts
 
@@ -54,8 +66,8 @@ Never print the key, never paste it into a prompt, never commit it. Every genera
 | `studio_find_animations` | Search the 678 Meshy presets `studio_rig_3d` can apply by words ("sword slash", "dance"). Free and local. |
 | `studio_get_job` | Poll a `jobId` until terminal. Returns status, `costUsd`, `errorMessage`, `resultAsset.url`. |
 | `studio_list_characters` / `studio_get_character` | Find an existing character and its reference URLs (you need the `full-body` or `face` URL for video swaps). |
-| `studio_create_character` | Register a character row: `name`, `slug`, `descriptorPrompt`, optional `negativePrompt`, `defaultModel`. Does not generate images. |
-| `studio_mint_character` | Run the 7-view identity sheet for a description and freeze the views as references on the character. The one-call path for "make me a consistent character". |
+| `studio_create_character` | Register a character row: `name`, `slug`, `descriptorPrompt`, `likenessRightsConfirmed: true` (see "The likeness confirmation"), optional `negativePrompt`, `defaultModel`. Does not generate images. |
+| `studio_mint_character` | Run the 7-view identity sheet for a description and freeze the views as references on the character. The one-call path for "make me a consistent character". Needs `likenessRightsConfirmed: true`, and refuses before spending anything without it. |
 | `studio_create_brand` | Register a brand: `name`, `slug`, optional `stylePrefix`, `context`. |
 | `studio_upload_brand_reference` | Attach a reference image (file or URL) with a `category` and `label` to a brand's library. |
 | `studio_run_workflow` | Execute an inline workflow definition (`projectId`, `definition`, optional `params`). Returns `runId`. |
@@ -119,13 +131,23 @@ GET {base}/api/v1/jobs/{jobId}
 
 A minted character is a `seed` face plus six edit views pinned to that seed: `three-quarter`, `profile`, `full-body`, `close-up`, `lighting-warm`, `lighting-cool`. Together with the seed `face` that is the 7-category reference set (use these exact category names; they drive reference ranking in try-on and casting). Once frozen, every generation that references the character reuses the same identity.
 
-Preferred path: `studio_mint_character` with `{ projectId, name, slug, description, negativePrompt?, visibility?: "listed" | "unlisted", waitSeconds? (default 600) }`. It runs the sheet workflow, waits, creates the character and uploads each view under its category, then returns `{ slug, name, runId, referenceCount, references[{ nodeId, category, referenceId, url }], costUsd }`. Pass `visibility: "listed"` when the human should see the mint on the Studio's Workflows page.
+### The likeness confirmation (required on every mint path)
+
+Creating a character requires `likenessRightsConfirmed: true`. It records, on the character, that the person you act for confirmed this sentence:
+
+> This character is not based on a real person, or the person shown gave me the rights to generate and mint their likeness.
+
+**Ask the human, every time, for each character, and pass `true` only after they said yes. Never assert it on your own**, not because the description sounds invented, and not because an earlier character was confirmed: the confirmation belongs to one character. Show them the sentence as written and the terms at https://studio.lumitra.co/terms (terms and acceptable use, currently a draft pending legal review). If they cannot confirm it, do not mint: a real person's likeness without that person's rights is not allowed on the Studio.
+
+What happens without it: `studio_mint_character` and `studio_create_character` refuse before any request is sent, so nothing is spent; the HTTP route `POST /api/characters` answers `422` with `code: "likeness_rights_confirmation_required"` and creates nothing; `studio_run_published` on a recipe that creates a character answers the same `422` before the run starts. The Studio stores who confirmed (your API key's service account), when, and the terms version. If `studio_mint_character` does not list a `likenessRightsConfirmed` argument, the server is `@marlinjai/studio-mcp` 0.2.0 or older and cannot mint any more: the Studio refuses its character-sheet run with `client_update_required` before anything is spent. Update the server to 0.3.0 or newer (`npx -y @marlinjai/studio-mcp@latest`) first.
+
+Preferred path: `studio_mint_character` with `{ projectId, name, slug, description, likenessRightsConfirmed: true, negativePrompt?, visibility?: "listed" | "unlisted", waitSeconds? (default 600) }`. It runs the sheet workflow, waits, creates the character and uploads each view under its category, then returns `{ slug, name, runId, referenceCount, references[{ nodeId, category, referenceId, url }], costUsd }`. Pass `visibility: "listed"` when the human should see the mint on the Studio's Workflows page.
 
 Manual path (when you want to inspect views before freezing):
 
 1. `studio_run_workflow` with the character-sheet definition (seed node: text-to-image on `fal/nano-banana-2`; six `image-edit` nodes on `fal/nano-banana-2-edit` whose `inputImages` reference the seed).
-2. Review the seven URLs with the user. If the seed face is wrong, re-run; do not freeze views from a rejected seed.
-3. `studio_create_character` `{ name, slug, descriptorPrompt, negativePrompt? }`.
+2. Review the seven URLs with the user. If the seed face is wrong, re-run; do not freeze views from a rejected seed. Ask for the likeness confirmation here at the latest (better before step 1, so nothing is generated for a character that cannot be minted).
+3. `studio_create_character` `{ name, slug, descriptorPrompt, likenessRightsConfirmed: true, negativePrompt? }`. Over plain HTTP that is `POST /api/characters` with the same body; without the field it answers `422` and creates nothing.
 4. Upload each approved view: `POST /api/characters/{slug}/references/upload` (multipart `file`, `category` in `face|three-quarter|profile|full-body|close-up|lighting-warm|lighting-cool`, `label`).
 
 Wardrobe variants (workwear, evening wear): one ad-hoc `image-edit` node on the `full-body` reference with a prompt like "change ONLY the clothing to ..., keep face, body and pose identical". Upload the result as an extra `full-body` reference with a descriptive label.
@@ -195,7 +217,7 @@ A recipe is a workflow published under a stable public slug (done through the HT
 
 1. `studio_list_published` to see what exists (or ask the user for the slug directly).
 2. `studio_describe_published` with the slug to see the frozen definition and its params.
-3. `studio_run_published` with the slug, `projectId` and `params` to run it.
+3. `studio_run_published` with the slug, `projectId` and `params` to run it. A recipe that creates a character also needs `likenessRightsConfirmed: true` (the same confirmation, asked of the human the same way); without it the run is refused with `likeness_rights_confirmation_required` before anything is spent.
 
 Running a recipe always executes the FROZEN definition, never the live authoring document, which may have moved on since publish. If every node in the run succeeds, the declared effects fire automatically and exactly once; a failed, partial or still-parked run never triggers them, so a broken run can never leave a half-created character, and a recipe whose graph contains a judge node creates nothing until the person has approved it. `studio_mint_character` and `studio_replace_character_in_video` are today still hand-written tools, not recipes, so both patterns currently coexist.
 
