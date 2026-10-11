@@ -5,13 +5,13 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.5.0"
+  version: "0.6.0"
   homepage: https://studio.lumitra.co
 ---
 
 # Lumitra Studio
 
-Lumitra Studio is a hosted generation service. You send prompts, and optionally a brand slug and a character slug; the Studio injects brand style and character references server-side, calls the image or video provider, stores the result and returns a signed URL plus the job's cost in USD. Nothing runs locally.
+Lumitra Studio is a hosted generation service. You send prompts, and optionally a brand slug and a character slug; the Studio injects brand style and character references server-side, calls the image or video provider, stores the result and returns a signed URL plus what the job cost your organization, in USD. Nothing runs locally.
 
 Two ways in, same contract:
 
@@ -34,10 +34,10 @@ Never print the key, never paste it into a prompt, never commit it. A key belong
 
 Every generation is metered on the key's organization. Which limit applies depends on how the organization is set up, and `studio_get_usage` tells you which: its `credits` field is an object for an organization on prepaid credits and `null` for one held to a monthly cap.
 
-- **Prepaid credits: every new organization** (and any the Lumitra operator moved onto credits). The organization has a credit balance and no monthly cap, unless the operator set one. A new organization starts with a one-time welcome credit of 3 USD (granted while the operator's monthly budget for welcome credits lasts; if that budget is used up the balance starts at zero and the operator can grant the credit by hand). Each finished generation is debited from the balance at provider cost times the organization's rate, 1.50 on pay as you go, or at 80 percent of the model's official list price where that is higher. A daily limit applies on top: 10 USD a day to begin with, which an owner or admin of the organization can change on the Billing page (`/app/billing`), up to 50 USD a day. Only what was actually rendered is charged, and a failed job that cost the provider nothing costs nothing.
+- **Prepaid credits: every new organization** (and any the Lumitra operator moved onto credits). The organization has a credit balance and no monthly cap, unless the operator set one. A new organization starts with a one-time welcome credit of 3 USD (granted while the operator's monthly budget for welcome credits lasts; if that budget is used up the balance starts at zero and the operator can grant the credit by hand). Each finished generation is paid from the balance at Studio's price for it; an organization with a subscription pays lower prices on many models. The estimate before a run and the job's `costUsd` after it are that price. A daily limit applies on top: 10 USD a day to begin with, which an owner or admin of the organization can change on the Billing page (`/app/billing`), up to 50 USD a day. Only what was actually rendered is charged, and a failed job that produced no charge costs nothing.
 - **A monthly cap: an organization the Studio already knew before prepaid credits became the start for new ones.** It keeps the cap it had: 20 USD a month when it never had a plan of its own, otherwise what the Lumitra operator set, which is the only way a cap can be unlimited. Using the Studio never moves such an organization onto credits.
 
-What `studio_get_usage` returns: `usedUsd`, `realizedUsd`, `inFlightEstimatedUsd`, `jobs` and `byModel` for the calendar month, all at provider cost; `capUsd` (the monthly cap, `null` for none) with `capSource` (`default` or `row`, an operator-set plan); `rpm` (a per-minute rate limit, `null` for none); and `credits`. For an organization on credits that is `{ balanceUsd, dailyLimitUsd, usedTodayUsd, dailyResetsAt }`: the prepaid balance, the daily limit (`null` when the operator removed it), what left the balance today with running jobs counted at their price, and when the day's count starts again (midnight UTC). These are in credit dollars, so they are higher than the provider-cost figures beside them. `balanceUsd` does not yet subtract what is reserved for requests that are still starting or running, so the room for a new request can be a little smaller than `balanceUsd`. `usedUsd` includes estimates of jobs still in flight and can go DOWN when one fails; that is not a bug.
+What `studio_get_usage` returns: `usedUsd`, `realizedUsd`, `inFlightEstimatedUsd`, `jobs` and `byModel` for the calendar month, all in what the organization paid (for an organization on credits: what left and will leave its balance for the month's jobs); `capUsd` (the monthly cap of an organization that is not on credits, `null` for none and always `null` on credits) with `capSource` (`default` or `row`, an operator-set plan); `rpm` (a per-minute rate limit, `null` for none); and `credits`. For an organization on credits that is `{ balanceUsd, dailyLimitUsd, usedTodayUsd, dailyResetsAt, operatorMonthlyLimit }`: the prepaid balance, the daily limit (`null` when the operator removed it), what left the balance today with running jobs counted at their price, when the day's count starts again (midnight UTC), and whether the Lumitra operator set a monthly limit on top (its amount is not reported). Every amount this tool returns is in the same dollars as the balance. `balanceUsd` does not yet subtract what is reserved for requests that are still starting or running, so the room for a new request can be a little smaller than `balanceUsd`. `usedUsd` includes estimates of jobs still in flight and can go DOWN when one fails; that is not a bug.
 
 A request that would go past a limit is refused before anything is charged, with a `402` whose `error` is a sentence written to be relayed to the user as is. The `studio_*` tools hand you that sentence unchanged, followed by the `code`:
 
@@ -45,7 +45,7 @@ A request that would go past a limit is refused before anything is charged, with
 |---|---|---|
 | `credits_exhausted` | The balance does not cover this request. The body carries `balanceUsd`, `availableUsd`, `neededUsd`, `heldUsd` and `topUpPath`. | The sentence says to add credits on the Billing page. If buying credits is not open to the organization there yet, the Lumitra operator (hello@lumitra.co) grants them. When the sentence says part of the balance is only reserved for requests that are still starting, wait a few seconds and send the same request again. |
 | `daily_cap_reached` | The daily limit is reached. The body carries `capUsd`, `usedUsd` and `resetsAt` (midnight UTC). | On credits, an owner or admin raises the limit on the Billing page, up to the ceiling the sentence names; otherwise wait for `resetsAt`. |
-| `monthly_cap_reached` | The monthly cap is reached. The body carries `capUsd`, `usedUsd` and `resetsAt`. | Only the Lumitra operator (hello@lumitra.co) can raise it. Do not retry before `resetsAt`. |
+| `monthly_cap_reached` | The monthly cap is reached. The body carries `resetsAt`, and for an organization that is not on credits also `capUsd` and `usedUsd`. | Only the Lumitra operator (hello@lumitra.co) can raise it. Do not retry before `resetsAt`. |
 
 A `429` means too many requests in a short time: either `code: "velocity_limit_reached"` (too many paid requests from one key within a minute; the sentence and `retryAfterSeconds` say how long to wait) or the organization's own per-minute rate limit. Both carry a `Retry-After` header; do not resubmit before it has passed.
 
@@ -55,7 +55,7 @@ A new organization starts empty. These three steps take it to one finished image
 
 1. **Set up a brand, or skip.** A brand (a style prefix plus reference images) is optional, and creating one is free. To skip it, go straight to step 2 and leave `brandSlug` out: `studio_generate_image` with only a `prompt` makes an image without a brand, and so does `POST /api/generate` over HTTP. To use one, create it first with `studio_create_brand` (a `name` and a `slug` are enough; add a `stylePrefix` when the user has a style in mind). Never invent a brand slug to fill the field: a `brandSlug` that names no brand of the organization is refused with `404` and `code: "input_not_found"`, and the refusal's text says to create the brand or leave `brandSlug` out.
 2. **Make one image.** Call `studio_generate_image` with a `prompt`, plus the `brandSlug` from step 1 if you created a brand. This is the first call that spends money. It waits by default and returns the signed image `url` and `costUsd`; with `wait: false` it returns a `jobId` to poll with `studio_get_job`. The HTTP call behaves like `wait: false`: it answers `{ "jobId", "kind", "candidates" }` and the image arrives by polling `GET /api/v1/jobs/{jobId}`. If the job ends `failed`, report its `errorMessage` and retry at most once. A failed job normally adds nothing to the organization's spend; trust its `costUsd` over that rule, because a job that fails after an earlier attempt of it succeeded keeps that attempt's cost, and the spend ledger counts it.
-3. **See what it cost.** Tell the user the job's `costUsd`: that is the provider cost of the job. Then call `studio_get_usage`. For an organization on prepaid credits, `credits.balanceUsd` is what is left of the balance and `credits.usedTodayUsd` what left it today; the image was debited at provider cost times the organization's rate (see "What limits spending"), so the balance fell by more than `costUsd`. For an organization on a monthly cap, `capUsd` minus `usedUsd` is the room left this month. `studio_get_spend` shows the totals at provider cost: the same ledger a person sees in the wallet at the top of every Studio page.
+3. **See what it cost.** Tell the user the job's `costUsd`: that is what the job cost the organization. Then call `studio_get_usage`. For an organization on prepaid credits, `credits.balanceUsd` is what is left of the balance and `credits.usedTodayUsd` what left it today; the balance fell by the job's `costUsd`. For an organization on a monthly cap, `capUsd` minus `usedUsd` is the room left this month. `studio_get_spend` shows the totals of what was paid: the same ledger a person sees in the wallet at the top of every Studio page.
 
 Where the first image lands, in this order: in the project you named with `projectId`, when you passed one (it must be a project of the organization, from `studio_list_projects`; any other id is a `404`); otherwise, when you passed a `brandSlug`, in the project whose slug equals the brand slug, which the Studio creates on first use; otherwise in the project `default`. So an image made without a brand and without a `projectId` is in `default`, and one made with a brand is in a project named after the brand: call `studio_list_projects` again to see it. Spend is counted for the whole organization whichever project a job is in.
 
@@ -71,8 +71,8 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | **Character** | A slug plus a descriptor prompt and a set of frozen reference images by **category**. Passing a character makes the Studio pin identity to those references. You can use the characters your organization owns and the ones another organization shared with everyone (`owned: false`): a shared character can be read and cast in generations but not edited, and its reference images come as Studio addresses, not permanent image URLs (see the tool table). A `characterSlug` you cannot use is refused the same way as an unknown brand. |
 | **Workflow** | A small graph of nodes (`generate-image`, `image-edit`, `image-to-video`, ...). Each node becomes a Job. Runs return per-node result URLs. This is how multi-step recipes (swap then animate) execute server-side. |
 | **Published recipe** | A workflow frozen under a stable public slug, optionally with a declared list of post-run effects (create a character, attach a reference). Run it by slug with `studio_run_published`; the effects fire automatically only if every node succeeds. See "Published recipes" below. |
-| **Spend** | A ledger of every Job's `costUsd`, which is the provider cost of the job. `studio_get_spend` reads it. |
-| **Credits / plan / usage** | What limits the organization: a prepaid credit balance with a daily limit (every new organization, starting with a 3 USD welcome credit and debited at 1.50 times provider cost), or a monthly USD cap (an organization from before prepaid credits: 20 USD unless the Lumitra operator set a plan), plus an optional per-minute rate limit. A generation call is refused with `402` or `429` when one is hit (see "What limits spending" above). `studio_get_usage` reads the current state. |
+| **Spend** | A ledger of every Job's `costUsd`, which is what the job cost the organization. `studio_get_spend` reads it; for an organization on prepaid credits its totals are what left the balance. |
+| **Credits / plan / usage** | What limits the organization: a prepaid credit balance with a daily limit (every new organization, starting with a 3 USD welcome credit and paying Studio's price for each generation), or a monthly USD cap (an organization from before prepaid credits: 20 USD unless the Lumitra operator set a plan), plus an optional per-minute rate limit. A generation call is refused with `402` or `429` when one is hit (see "What limits spending" above). `studio_get_usage` reads the current state. |
 
 ## MCP tools and when to use each
 
@@ -80,8 +80,8 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 |---|---|
 | `studio_list_projects` | Resolve the `projectId` you need for characters, workflows and runs. Call once, cache the id. |
 | `studio_generate_image` | One prompt to one image job. Args: `prompt` (the only required one), optional `brandSlug` (a brand of the organization, or leave it out for an image without a brand), `brandMode`, `characterSlug`, `projectId` (where the image is filed), `aspectRatio`, `model`, `imageSize`, `seed`, `candidateCount`, `wait`. Waits by default and returns `jobId`, `url`, `urls`, `costUsd` and `candidates: { requested, rendered, mayRender? }`; with `wait: false` it returns the `jobId` at once. Some models render one image whatever `candidateCount` asks for: the result then also carries a `notice` saying how many will be made and why, which you pass on to the user. Only rendered images are charged. |
-| `studio_generate_3d` | One prompt, or one image (`imageUrl`), to one 3D model (a textured GLB mesh) through 3D AI Studio. Optional `model` (text: Tripo 3.1, Hunyuan Rapid or Pro; image: TRELLIS.2, Tripo 3.1), `options` quality flags that each change the price, `projectId`. Waits by default (one to five minutes) and returns the GLB `url` and `costUsd` (typically $0.25 to $0.70 per model). |
-| `studio_rig_3d` | Rig a humanoid Model3D and animate it (Meshy on fal): `projectId`, `meshAssetId` (the `assetId` `studio_generate_3d` returns), up to 10 `animations` as preset names or ids, optional `heightMeters`. Walk and run clips always come with the rig. Waits by default (one to three minutes) and returns `rigUrl`, `clips` (name and url each) and `costUsd`: $0.20 per rig plus $0.12 per preset. Humanoids only. |
+| `studio_generate_3d` | One prompt, or one image (`imageUrl`), to one 3D model (a textured GLB mesh) through 3D AI Studio. Optional `model` (text: Tripo 3.1, Hunyuan Rapid or Pro; image: TRELLIS.2, Tripo 3.1), `options` quality flags that each change the price, `projectId`. Waits by default (one to five minutes) and returns the GLB `url` and `costUsd` (what the model cost the organization; the quality flags decide it). |
+| `studio_rig_3d` | Rig a humanoid Model3D and animate it (Meshy on fal): `projectId`, `meshAssetId` (the `assetId` `studio_generate_3d` returns), up to 10 `animations` as preset names or ids, optional `heightMeters`. Walk and run clips always come with the rig. Waits by default (one to three minutes) and returns `rigUrl`, `clips` (name and url each) and `costUsd` (a price per rig plus a price per preset you ask for). Humanoids only. |
 | `studio_find_animations` | Search the 678 Meshy presets `studio_rig_3d` can apply by words ("sword slash", "dance"). Free and local. |
 | `studio_get_job` | Poll a `jobId` until terminal. Returns status, `costUsd`, `errorMessage`, `resultAsset.url`. |
 | `studio_list_characters` / `studio_get_character` | Find a character you can use and its reference images (you need the `full-body` or `face` one for video swaps). The list holds the organization's own characters and the ones another organization shared with everyone, marked `owned: false`; when both use the same slug, yours is the one listed and used. A shared character is readable and castable, never editable (an upload, edit or delete answers `403`). For a character you own, a reference `url` is a direct image URL. For a shared one it is a Studio address: pass it unchanged as an image input to any Studio tool and the Studio resolves it when the job runs, but it is not a public image URL, and it stops working the moment the owner stops sharing. |
@@ -94,7 +94,7 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_decide_judge` | Pass a PERSON'S approve/reject on to a parked judge node. Never your own judgement. |
 | `studio_get_run_output` | Fresh signed URL for one node's result (`runId`, `nodeId`). |
 | `studio_replace_character_in_video` | The packaged video route: scene frame plus character reference, swap in a still, animate it. Pass an explicit `swapPrompt` (see "Character replacement"). Returns a `runId` to poll with `studio_get_run`. |
-| `studio_get_spend` | Report what a session or time window cost, at provider cost. Call it at the end of any batch and tell the user the number. |
+| `studio_get_spend` | Report what a session or time window cost the organization. Call it at the end of any batch and tell the user the number. |
 | `studio_get_usage` | Check what limits the organization before a large batch, or after a `402`/`429` to see what tripped: the credit balance and daily limit (`credits`) for an organization on prepaid credits, the monthly cap (`capUsd`) otherwise, plus the per-minute rate limit and month-to-date spend. See "What limits spending" for every field. `usedUsd` includes in-flight (not yet settled) job estimates and can go DOWN as well as up when one fails, this is not a bug. |
 | `studio_workflow_describe` | Learn the node vocabulary before authoring: task types with ports and prompt policy, input types, op types, patch limits. Add `includeModels: true` to pick a model id. |
 | `studio_workflow_get` | Read a saved workflow as a summary (nodes, wires, `revision`, `projection`); `full: true` for the whole document. |
@@ -142,7 +142,7 @@ POST {base}/api/generate
          "code": "input_not_found", "input": "brandSlug" }
 
 GET {base}/api/v1/jobs/{jobId}
--> { "job": { "status": "succeeded", "costUsd": 0.04, "model": "kie/nano-banana-2", "errorMessage": null },
+-> { "job": { "status": "succeeded", "costUsd": 0.064, "model": "kie/nano-banana-2", "errorMessage": null },
      "resultAsset": { "url": "https://...signed...png" } }
 ```
 
@@ -175,7 +175,7 @@ Manual path (when you want to inspect views before freezing):
 
 Wardrobe variants (workwear, evening wear): one ad-hoc `image-edit` node on the `full-body` reference with a prompt like "change ONLY the clothing to ..., keep face, body and pose identical". Upload the result as an extra `full-body` reference with a descriptive label.
 
-Expect about $0.30 per mint (7 images).
+Expect about $0.84 per mint (7 images at about $0.12 each) for an organization on prepaid credits without a subscription; a run's estimate says the exact figure before anything is spent.
 
 ## Brands and references
 
@@ -252,13 +252,13 @@ A run whose estimated cost meets or exceeds $10 needs explicit confirmation: wit
 
 | Operation | Typical cost |
 |---|---|
-| One image (`kie/nano-banana-2` default) | about $0.04, about 40 s |
-| Character mint (7 views) | about $0.30 |
-| Still swap (one edit) | about $0.05 |
-| 5 s image-to-video | $0.35 (Kling base) to $0.62 (Seedance 1080p) |
-| One video shot, one take (swap plus animate) | about $0.70 |
+| One image (the default model) | about $0.06, and up to $0.18 when the default route falls back to its second provider; about 40 s |
+| Character mint (7 views) | about $0.84 |
+| Still swap (one edit) | about $0.12 |
+| 5 s image-to-video | about $0.53 (Kling 2.5) to $0.93 (Seedance) |
+| One video shot, one take (swap plus animate) | about $1.05 |
 
-These are provider costs, and every job reports its real `costUsd` in the same terms. An organization on prepaid credits pays that cost times its rate (1.50 on pay as you go, so about $0.06 for a $0.04 image), or 80 percent of the model's list price where that is higher; `studio_get_usage` shows what actually left the balance. Sum the `costUsd` values, and always tell the user the total at the end of a batch, saying which of the two figures it is. Before a batch larger than 20 images or any video work, state the estimate and get a go-ahead.
+These are Studio's prices for an organization on prepaid credits without a subscription, as of October 2026; a subscription lowers many of them, and an organization on a monthly cap arranged with the Lumitra operator has its own amounts. Never quote a figure from this table as what something cost: every job reports its real `costUsd`, which is what the job cost the organization, and for an organization on prepaid credits exactly what left its balance. Sum the `costUsd` values, and always tell the user the total at the end of a batch. Before a batch larger than 20 images or any video work, state the estimate and get a go-ahead.
 
 ## Failure handling
 
