@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.6.0"
+  version: "0.7.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -105,6 +105,17 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_list_published` | List every published recipe (`slug`, `label`, `hasEffects`). Call this before `studio_run_published` if you don't already know the slug. Free. |
 | `studio_describe_published` | Read one recipe's frozen definition by slug, so you know what params it needs before running it. Free. |
 | `studio_run_published` | Run a published recipe by slug. `{ slug }` -> `{ runId }`, effects fire automatically on a fully successful run. |
+| `studio_create_project` | Create a project (`name` only; the slug is derived). A project keeps saved workflows, runs, assets and chats together; characters, products, locations, brands and campaigns are shared by every project. |
+| `studio_rename_project` | Rename a project (`projectId`, `name`). The default project keeps its slug `default`. |
+| `studio_delete_project` | Delete a project for everyone with its workflows, runs, assets and chats (needs a key with the admin role). The person confirms it in the chat, see "Deleting needs the person's yes". Refused for the default project and while work is running in the project. |
+| `studio_list_workflows` | List the saved workflows of a project (`savedId`, `label`, `version`); omit `projectId` for the default project. |
+| `studio_move_workflow` | Move a saved workflow to another project of the organization with its runs and results (`savedId`, `toProjectId`, `projectId` when it is not in the default project). Nothing is regenerated; move it back to undo. |
+| `studio_list_campaigns` | List the organization's campaigns (`id`, `name`, shot count). |
+| `studio_delete_campaign` | Delete a campaign with its shot list and decisions; its images stay in the asset library. The person confirms it in the chat, see "Deleting needs the person's yes". Refused while a shot is still rendering. |
+
+### Deleting needs the person's yes
+
+`studio_delete_project` and `studio_delete_campaign` never delete on your word alone. The tool reads what would be removed and asks the person through your client's confirmation dialog; on a yes it deletes, on a no it returns `declined: true` and nothing happens. If your client has no such dialog, the tool returns `confirmationRequired: true` with a `summary` and a `confirmationToken` and deletes nothing. Then show the `summary` to the person exactly as written, ask them to confirm in the chat, and only after they explicitly say yes call the same tool again with the `confirmationToken`. Never confirm on their behalf, never ask for a yes before you have shown the summary, and never reuse a token: it works once, expires after ten minutes, and stops working if the project or campaign changed since it was issued (you then get a fresh summary to show).
 
 Rule of thumb: anything that creates a job is asynchronous. Submit, then poll with `studio_get_job` or `studio_get_run` every 5 seconds until the status is terminal. Do not poll faster than that.
 
