@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.7.0"
+  version: "0.8.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -258,6 +258,15 @@ Running a recipe always executes the FROZEN definition, never the live authoring
 ## Spend confirmation
 
 A run whose estimated cost meets or exceeds $10 needs explicit confirmation: without it, `studio_run_workflow` / `studio_run_published` refuse with `confirmation_required` and no run is created, nothing is spent. Re-send the SAME request with `confirm: true` to proceed. This is a hard stop, not a warning: always tell the user the estimate and get a go-ahead before adding `confirm: true` yourself, the same rule the "Cost expectations" section below already asks for on any batch over 20 images.
+
+## Continuity check before a clip with a start and an end frame
+
+An image-to-video model given a start frame and an end frame that disagree invents or erases the difference in the middle of the clip (a bystander vanishes, a tool appears from nothing). So before a run executes an image-to-video node with BOTH `inputImageUrl` (start frame) and `endImageUrl` (end frame), the Studio compares the two frames with a vision model: one small paid check per new pair of frames, remembered for your organization, so an unchanged pair is never charged twice. It comes after the spend confirmation above.
+
+- Frames that disagree: `studio_run_workflow` / `studio_run_published` refuse with `continuity_mismatch` and `nodes: [{ nodeId, differences }]`. No run is created and nothing is spent on the clip. Show the person the differences as written. The fix is in the frames (a corrected edit of the start or end keyframe, so both show the same people and the same objects in their hands), not in the clip's prompt.
+- The check could not run (a frame that is not stored in Studio, a provider error, a timeout): they refuse with `continuity_unchecked` and `nodes: [{ nodeId, reason }]`.
+- Either way, re-send the SAME request with `acknowledgeContinuity: true` to run anyway, and only when the person decided to. A pair that was run anyway is not asked about again.
+- A frame made by a node of the same run (a keyframe and its clip in one run) cannot be compared before the run starts: the clip is checked when it becomes ready, and if the frames disagree the clip node fails with `continuity_mismatch` in its error, before anything is spent on it. Run the clip again on its own to see the differences and decide. `studio_replace_character_in_video` with an `endFrameUrl` is such a run (the swapped still is the start frame): when its video node fails with `continuity_mismatch`, show the differences, and call it again with `acknowledgeContinuity: true` only when the person decides to run anyway.
 
 ## Cost expectations
 
