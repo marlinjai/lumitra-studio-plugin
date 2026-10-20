@@ -49,8 +49,10 @@ A **full-body** scope (the body comes from the character, not the footage)
 changes the silhouette. That has consequences to state before spending: the
 background the old body covered must be reconstructed, not kept; every contact
 point and occlusion (a hand on a tool, a shoulder behind a door) must be
-re-derived; and a composite needs a mask covering both silhouettes plus the
-revealed background.
+re-derived. The edit model redraws both, so let it: never cut the new body out
+and paste it onto the original with a local script (it clipped heads and
+mis-scaled people, and the result shows no inputs on the canvas). Two people in
+one frame are two chained edits, the second taking the first's output.
 
 ## 3. The analysis record
 
@@ -73,7 +75,7 @@ guessed, and leaves unknowns unknown.
       "confidence": "low | medium | high",
       "measured_value": null,
       "instruction": "Match the target face's original apparent softness.",
-      "enforcement": ["prompt", "compositing", "review"],
+      "enforcement": ["prompt", "review"],
       "check": "Compare corresponding edges at matched resolution."
     }
   ],
@@ -92,8 +94,8 @@ Rules for the record:
 - **Sample the whole shot,** not just its first and last frame: add frames at
   head turns, occlusions, contact changes, lighting changes and focus pulls.
   Two end frames can agree while the middle loses the glasses.
-- **Give every constraint an owner:** the prompt, a model control, compositing,
-  or human review. A constraint no stage enforces is a wish.
+- **Give every constraint an owner:** the prompt, a model control, a follow-up
+  edit, or human review. A constraint no stage enforces is a wish.
 
 ## 4. Conditional vocabulary
 
@@ -227,11 +229,11 @@ other good scores.
 
 Defect categories: `identity_drift`, `accessory_loss`, `focus_mismatch`,
 `motion_blur_mismatch`, `lighting_mismatch`, `color_transform_error`,
-`contact_failure`, `occlusion_failure`, `matte_failure`, `background_drift`,
+`contact_failure`, `occlusion_failure`, `background_drift`,
 `temporal_flicker`, `resolution_mismatch`, `timing_mismatch`.
 
 Budget: one initial candidate plus two retries per shot, retrying from the
 source or an approved checkpoint, never by re-editing an already degraded
 output. Stop sooner when another prompt cannot supply the missing capability,
 and switch route instead: a different reference, a shorter segment, another
-model, compositing, or manual treatment.
+model, or a chained edit on an approved output.
