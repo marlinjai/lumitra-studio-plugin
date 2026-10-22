@@ -118,6 +118,8 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_composition_get` | Read a post: items, overlays and the `revision` to build the next patch on. Free. |
 | `studio_composition_apply` | Change a post atomically on `baseRevision`; refusals are `{ ok: false, code, hint }` results (`stale_revision`, `invalid_patch` with `not_in_kit` or `invalid_asset`, `idempotency_mismatch`, `network_error`). Free. |
 | `studio_composition_render` | Render it: a carousel to JPEG slides, a reel to an H.264 MP4. Waits and returns the asset URLs, or `not_ready` with every reason to fix first. Free (Studio's own server). |
+| `studio_social_list_projects` | The company's Lumitra Social projects (one Instagram account each) and the one this brand went to last. Free. |
+| `studio_composition_send_to_social` | Send the rendered post to Lumitra Social as a draft or scheduled post. Creates a post the planner will publish: confirm project, caption and time with the user first. |
 | `studio_delete_campaign` | Delete a campaign with its shot list and decisions; its images stay in the asset library. The person confirms it in the chat, see "Deleting needs the person's yes". Refused while a shot is still rendering. |
 
 ### Deleting needs the person's yes
@@ -260,6 +262,7 @@ A post is a carousel (up to 10 slides of the project's images) or a reel (the pr
 2. `studio_composition_describe` once for the shapes and limits (up to 10 slides; a reel of up to 30 clips and 40 overlays in all), then `studio_list_assets` with the `projectId` (`subtype: Image` for slide backgrounds, `Video` for clips) for the asset ids, then `studio_composition_create` with `kind`, `brandSlug`, `projectId` and the ops: `addItem` per slide (`background.assetId` is an image asset of the project) or per clip (a video asset, `trimIn`/`trimOut` in seconds), `addOverlay` per text, logo or shape (`target` is the item id, or `"reel"` across a whole reel). Boxes are fractions of the frame; keep text inside the safe area (on a reel, out of the top 14% and bottom 20%).
 3. `studio_composition_apply` to change it, on the `revision` you last saw, with the same refusal codes as workflows.
 4. `studio_composition_render`: on `not_ready`, fix every listed reason and render again. An identical render is reused. One reel renders at a time per company: on `render_busy`, wait for the job it names, then render again.
+5. To schedule it: `studio_social_list_projects`, then `studio_composition_send_to_social` with the `projectSlug`, caption, hashtags and `scheduledAt` (or none for a draft the user schedules in the planner). Confirm all of it with the user first: the planner publishes to Instagram at that time. A reel goes as a reel and a single-slide carousel as a feed image; carousels of several slides cannot be sent yet. On `not_connected` or `link_broken`, a company owner or admin has to connect Lumitra Social once in Studio (Posts editor, Send to Social) with a company API key; you cannot do that for them. On `social_unavailable`, retry with the same `idempotencyKey`.
 
 If a create comes back as `network_error` or `server_error`, retry it with the `idempotencyKey` that result returned: the first post comes back instead of a second one.
 
