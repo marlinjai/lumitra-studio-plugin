@@ -257,9 +257,11 @@ Never rebuild a workflow from scratch to change one thing: read it, apply the op
 A post is a carousel (up to 10 slides of the project's images) or a reel (the project's clips, 3 to 90 s) with text, logo and shape overlays that can only use the brand's kit. The Posts editor in Studio and these tools edit the same document. Editing and rendering are free.
 
 1. `studio_brand_kit_get` for the brand: overlays name its colour ids, `headline`/`body`, `primary`/`secondary` and the weights each font has. There is no field for a hex colour, a font name or a pixel size.
-2. `studio_composition_describe` once for the shapes, then `studio_composition_create` with `kind`, `brandSlug`, `projectId` and the ops: `addItem` per slide (`background.assetId` is an image asset of the project, from `studio_describe_project`) or per clip (a video asset, `trimIn`/`trimOut` in seconds), `addOverlay` per text, logo or shape (`target` is the item id, or `"reel"` across a whole reel). Boxes are fractions of the frame; keep text inside the safe area (on a reel, out of the top 14% and bottom 20%).
+2. `studio_composition_describe` once for the shapes and limits (up to 10 slides; a reel of up to 30 clips and 40 overlays in all), then `studio_list_assets` with the `projectId` (`subtype: Image` for slide backgrounds, `Video` for clips) for the asset ids, then `studio_composition_create` with `kind`, `brandSlug`, `projectId` and the ops: `addItem` per slide (`background.assetId` is an image asset of the project) or per clip (a video asset, `trimIn`/`trimOut` in seconds), `addOverlay` per text, logo or shape (`target` is the item id, or `"reel"` across a whole reel). Boxes are fractions of the frame; keep text inside the safe area (on a reel, out of the top 14% and bottom 20%).
 3. `studio_composition_apply` to change it, on the `revision` you last saw, with the same refusal codes as workflows.
-4. `studio_composition_render`: on `not_ready`, fix every listed reason and render again. An identical render is reused.
+4. `studio_composition_render`: on `not_ready`, fix every listed reason and render again. An identical render is reused. One reel renders at a time per company: on `render_busy`, wait for the job it names, then render again.
+
+If a create comes back as `network_error` or `server_error`, retry it with the `idempotencyKey` that result returned: the first post comes back instead of a second one.
 
 ## Published recipes
 
