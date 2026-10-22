@@ -111,6 +111,13 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_list_workflows` | List the saved workflows of a project (`savedId`, `label`, `version`); omit `projectId` for the default project. |
 | `studio_move_workflow` | Move a saved workflow to another project of the organization with its runs and results (`savedId`, `toProjectId`, `projectId` when it is not in the default project). Nothing is regenerated; move it back to undo. |
 | `studio_list_campaigns` | List the organization's campaigns (`id`, `name`, shot count). |
+| `studio_brand_kit_get` | A brand's kit: the only colours (by id), sizes (headline, body), fonts (primary, secondary, with their weights and styles) and logos (light, dark) a post may use. `{ brandSlug }`. Free. |
+| `studio_composition_describe` | The post vocabulary: op types, slide, clip and overlay shapes, aspects and Instagram's limits. No request. Free. |
+| `studio_composition_list` | A project's carousels and reels, newest first (`projectId` optional). Free. |
+| `studio_composition_create` | Start a carousel or reel for a brand, optionally with its first ops (one call can build a whole carousel). `{ kind, brandSlug, projectId?, aspect?, label?, ops? }` -> `{ ok: true, composition }`. Free. |
+| `studio_composition_get` | Read a post: items, overlays and the `revision` to build the next patch on. Free. |
+| `studio_composition_apply` | Change a post atomically on `baseRevision`; refusals are `{ ok: false, code, hint }` results (`stale_revision`, `invalid_patch` with `not_in_kit` or `invalid_asset`, `idempotency_mismatch`, `network_error`). Free. |
+| `studio_composition_render` | Render it: a carousel to JPEG slides, a reel to an H.264 MP4. Waits and returns the asset URLs, or `not_ready` with every reason to fix first. Free (Studio's own server). |
 | `studio_delete_campaign` | Delete a campaign with its shot list and decisions; its images stay in the asset library. The person confirms it in the chat, see "Deleting needs the person's yes". Refused while a shot is still rendering. |
 
 ### Deleting needs the person's yes
@@ -244,6 +251,15 @@ A saved workflow is a revisioned document that the Studio canvas, the HTTP API a
 5. `studio_run_workflow` with `projectId`, `savedId` and `params`.
 
 Never rebuild a workflow from scratch to change one thing: read it, apply the ops that change that thing.
+
+## Carousels and reels (Posts)
+
+A post is a carousel (up to 10 slides of the project's images) or a reel (the project's clips, 3 to 90 s) with text, logo and shape overlays that can only use the brand's kit. The Posts editor in Studio and these tools edit the same document. Editing and rendering are free.
+
+1. `studio_brand_kit_get` for the brand: overlays name its colour ids, `headline`/`body`, `primary`/`secondary` and the weights each font has. There is no field for a hex colour, a font name or a pixel size.
+2. `studio_composition_describe` once for the shapes, then `studio_composition_create` with `kind`, `brandSlug`, `projectId` and the ops: `addItem` per slide (`background.assetId` is an image asset of the project, from `studio_describe_project`) or per clip (a video asset, `trimIn`/`trimOut` in seconds), `addOverlay` per text, logo or shape (`target` is the item id, or `"reel"` across a whole reel). Boxes are fractions of the frame; keep text inside the safe area (on a reel, out of the top 14% and bottom 20%).
+3. `studio_composition_apply` to change it, on the `revision` you last saw, with the same refusal codes as workflows.
+4. `studio_composition_render`: on `not_ready`, fix every listed reason and render again. An identical render is reused.
 
 ## Published recipes
 
