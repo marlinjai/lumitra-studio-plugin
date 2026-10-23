@@ -280,6 +280,16 @@ Running a recipe always executes the FROZEN definition, never the live authoring
 
 A run whose estimated cost meets or exceeds $10 needs explicit confirmation: without it, `studio_run_workflow` / `studio_run_published` refuse with `confirmation_required` and no run is created, nothing is spent. Re-send the SAME request with `confirm: true` to proceed. This is a hard stop, not a warning: always tell the user the estimate and get a go-ahead before adding `confirm: true` yourself, the same rule the "Cost expectations" section below already asks for on any batch over 20 images.
 
+## Character references on a clip (holding identity)
+
+A clip made from one start keyframe drifts: the video model sees only the first frame, so a face and hair slowly change over four seconds. Kling O3 (`route/kling-o3`, or pinned `kie/kling-o3-image-to-video`; the fal fallback is `fal/kling-o3-pro-reference-to-video`) also takes **character references**: several photos of each person in the shot, which it holds the identity to for the whole clip. A minted character's frozen views (front, three-quarter, back, full body) are exactly that.
+
+- On a workflow, wire each photo into the image-to-video node's `reference` port (op `{ type: "connect", source, target, port: "reference" }`), in order, each character's **frontal view first**. References never count as the start or end frame: those stay on the `image` port.
+- 2 to 4 photos per character, up to 3 characters (fal: 7 photos in all). With more than one character, say which one each photo shows: `{ type: "setNodeSetting", id, key: "referenceElements", value: { "<sourceNodeId>": 2 } }` (a photo not named is character 1).
+- A model without the capability refuses reference wires; the run refuses a character with one photo or too many, before anything is spent. References do not change the clip's price; the run's estimate shows it as usual.
+- The prompt names the references as `@Element1`, `@Element2`; a prompt that does not gets one sentence in front tying them to the people in the start frame.
+- Inline definitions (studio_run_workflow with a DAG) take `referenceImageUrls` plus `referenceElementIndexes` (the 0-based character of each photo, ascending, e.g. `[0, 0, 0, 1, 1]`).
+
 ## Continuity check before a clip with a start and an end frame
 
 An image-to-video model given a start frame and an end frame that disagree invents or erases the difference in the middle of the clip (a bystander vanishes, a tool appears from nothing). So before a run executes an image-to-video node with BOTH `inputImageUrl` (start frame) and `endImageUrl` (end frame), the Studio compares the two frames with a vision model: one small paid check per new pair of frames, remembered for your organization, so an unchanged pair is never charged twice. It comes after the spend confirmation above.
