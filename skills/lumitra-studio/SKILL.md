@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.9.0"
+  version: "0.8.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -288,6 +288,7 @@ A clip made from one start keyframe drifts: the video model sees only the first 
 - 2 to 4 photos per character, up to 3 characters (fal: 7 photos in all). With more than one character, say which one each photo shows: `{ type: "setNodeSetting", id, key: "referenceElements", value: { "<sourceNodeId>": 2 } }` (a photo not named is character 1).
 - A model without the capability refuses reference wires; the run refuses a character with one photo or too many, before anything is spent. References do not change the clip's price; the run's estimate shows it as usual.
 - The prompt names the references as `@Element1`, `@Element2`; a prompt that does not gets one sentence in front tying them to the people in the start frame.
+- To compare, `kie/gemini-omni-flash-1-1-reference-to-video` (Gemini Omni 1.1 Flash in its reference mode) takes the same wiring with 1 to 6 character photos in all and no end frame. KIE does not lock the first frame in this mode: the start frame goes in as reference image 1 and the prompt names it the exact scene and first frame, so the clip follows it closely but may not start on it pixel for pixel. Use Kling O3 when the first frame must be exact.
 - Inline definitions (studio_run_workflow with a DAG) take `referenceImageUrls` plus `referenceElementIndexes` (the 0-based character of each photo, ascending, e.g. `[0, 0, 0, 1, 1]`).
 
 ## Continuity check before a clip with a start and an end frame
