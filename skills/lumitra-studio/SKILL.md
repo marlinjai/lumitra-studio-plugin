@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.10.0"
+  version: "0.11.0"
   homepage: https://studio.lumitra.co
 ---
 
