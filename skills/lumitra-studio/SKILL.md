@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.9.1"
+  version: "0.10.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -98,7 +98,7 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_get_usage` | Check what limits the organization before a large batch, or after a `402`/`429` to see what tripped: the credit balance and daily limit (`credits`) for an organization on prepaid credits, the monthly cap (`capUsd`) otherwise, plus the per-minute rate limit and month-to-date spend. See "What limits spending" for every field. `usedUsd` includes in-flight (not yet settled) job estimates and can go DOWN as well as up when one fails, this is not a bug. |
 | `studio_workflow_describe` | Learn the node vocabulary before authoring: task types with ports and prompt policy, input types, op types, patch limits. Add `includeModels: true` to pick a model id. |
 | `studio_workflow_get` | Read a saved workflow as a summary (nodes, wires, `revision`, `projection`); `full: true` for the whole document. |
-| `studio_workflow_create` | Build a new saved workflow from ops. Returns `savedId` and `revision`. Free. |
+| `studio_workflow_create` | Build a new saved workflow from ops. Returns `savedId`, `revision` and the `idempotencyKey` to retry with (a retry with it returns the first workflow, never a second). Free. |
 | `studio_workflow_apply` | Change a saved workflow atomically on top of `baseRevision`. Every refusal is a `{ ok: false, code, hint }` result to act on, not an error. Free. |
 | `studio_workflow_validate` | Dry-run a document or saved workflow with ops and run params before spending anything. |
 | `studio_workflow_screenshot` | Render a saved workflow as a labelled-box-and-wire diagram, the Figma `get_screenshot` equivalent. A diagnostic (is this wired the way I meant), not a pixel-exact preview. `{ savedId }` -> `{ url, width, height }`. Free. |
@@ -245,7 +245,7 @@ Binding kinds: `literal` (value inline), `param` (from `params`), `ref` (another
 A saved workflow is a revisioned document that the Studio canvas, the HTTP API and the `studio_workflow_*` tools all edit through the same op vocabulary, so you and a human can work on the same workflow without overwriting each other. Authoring is free; `studio_run_workflow` with the `savedId` is what spends money.
 
 1. `studio_workflow_describe` once per session (filter with `tasks`, add `includeModels: true` when you need model ids).
-2. `studio_workflow_create` with ops: `addNode` for each node (an `input` node is a declared run parameter; `task` nodes carry `task`, `model`, `prompt`), `connect` for each wire (`source`, `target`, `port`). Pick your own node ids. Check `summary.projection`: `ok: false` lists why it cannot run yet (`no_model`, `prompt_required`, ...).
+2. `studio_workflow_create` with ops: `addNode` for each node (an `input` node is a declared run parameter; `task` nodes carry `task`, `model`, `prompt`), `connect` for each wire (`source`, `target`, `port`). Pick your own node ids. Check `summary.projection`: `ok: false` lists why it cannot run yet (`no_model`, `prompt_required`, ...). If the create comes back as `network_error` or `server_error`, retry it with the `idempotencyKey` that result returned and the same label and ops: the first workflow comes back (`replayed: true`, at its current `revision`) instead of a second one. `idempotency_mismatch` means that key already made a different workflow: send a new one.
 3. `studio_workflow_apply` to change it: pass the `revision` you last saw as `baseRevision`. Every refusal comes back as `{ ok: false, code, hint }`, so read the `code` and do what it says: `stale_revision` (someone else changed it: read the returned `summary`, rebase your ops, apply again on the new revision), `invalid_patch` (`error.opIndex` names the offending op), `forbidden` (`missingScope` names what your key lacks), `not_editable` (this workflow cannot be patched at all: it is still runnable, build a new one instead), `lossy_import` (read `notes`, then resend the same ops with `acknowledgeLossy: true` and a NEW `idempotencyKey`), `idempotency_mismatch` (that key was used for different ops: send a fresh one). On `network_error` or `server_error`, retry with the SAME `idempotencyKey` the result carries, never with a fresh one; `replayed: true` in a success result means the earlier attempt had already landed.
 
    A workflow the canvas cannot represent is served read-only: `studio_workflow_get` returns `readOnly: true` with no nodes, and only `studio_run_workflow` works on it. One flagged `needsLossyAcknowledgement: true` needs the `acknowledgeLossy` confirmation on its first patch.
