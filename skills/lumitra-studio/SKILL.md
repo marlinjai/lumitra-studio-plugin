@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.12.0"
+  version: "0.13.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -79,7 +79,7 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | Tool | Use it to |
 |---|---|
 | `studio_list_projects` | Resolve the `projectId` you need for characters, workflows and runs. Call once, cache the id. |
-| `studio_generate_image` | One prompt to one image job. Args: `prompt` (the only required one), optional `brandSlug` (a brand of the organization, or leave it out for an image without a brand), `brandMode`, `characterSlug`, `projectId` (where the image is filed), `aspectRatio`, `model`, `imageSize`, `seed`, `candidateCount`, `wait`. Waits by default and returns `jobId`, `url`, `urls`, `costUsd` and `candidates: { requested, rendered, mayRender? }`; with `wait: false` it returns the `jobId` at once. Some models render one image whatever `candidateCount` asks for: the result then also carries a `notice` saying how many will be made and why, which you pass on to the user. Only rendered images are charged. |
+| `studio_generate_image` | One prompt to one image job. Args: `prompt` (the only required one), optional `brandSlug` (a brand of the organization, or leave it out for an image without a brand), `brandMode`, `characterSlug`, `mentions` (several characters, products and locations of the organization in one image, see below), `projectId` (where the image is filed), `aspectRatio`, `model`, `imageSize`, `seed`, `candidateCount`, `wait`. Waits by default and returns `jobId`, `url`, `urls`, `costUsd` and `candidates: { requested, rendered, mayRender? }`; with `wait: false` it returns the `jobId` at once. Some models render one image whatever `candidateCount` asks for: the result then also carries a `notice` saying how many will be made and why, which you pass on to the user. Only rendered images are charged. |
 | `studio_generate_3d` | One prompt, or one image (`imageUrl`), to one 3D model (a textured GLB mesh) through 3D AI Studio. Optional `model` (text: Tripo 3.1, Hunyuan Rapid or Pro; image: TRELLIS.2, Tripo 3.1), `options` quality flags that each change the price, `projectId`. Waits by default (one to five minutes) and returns the GLB `url` and `costUsd` (what the model cost the organization; the quality flags decide it). |
 | `studio_rig_3d` | Rig a humanoid Model3D and animate it (Meshy on fal): `projectId`, `meshAssetId` (the `assetId` `studio_generate_3d` returns), up to 10 `animations` as preset names or ids, optional `heightMeters`. Walk and run clips always come with the rig. Waits by default (one to three minutes) and returns `rigUrl`, `clips` (name and url each) and `costUsd` (a price per rig plus a price per preset you ask for). Humanoids only. |
 | `studio_find_animations` | Search the 678 Meshy presets `studio_rig_3d` can apply by words ("sword slash", "dance"). Free and local. |
@@ -206,6 +206,22 @@ POST /api/brands/{slug}/library/upload  multipart: file, category (mood|style|id
 ```
 
 Same via `studio_create_brand` and `studio_upload_brand_reference`. After that, pass `brandSlug` (and optionally `brandMode`) on any generation and the Studio applies the style and attaches the references. A brand belongs to the organization that created it: its slug only resolves for that organization's keys, and another organization may use the same slug for a brand of its own. Keep a brand library small and on-style: five strong references beat thirty mixed ones.
+
+## Several characters, products and locations in one image (mentions)
+
+`studio_generate_image` (and `POST /api/generate`) takes `mentions`: the organization's characters, products and locations to put in the image, in the order the prompt names them, each by its slug.
+
+```json
+{ "prompt": "Ana wearing the Charcoal Coat at Chalet Alpine, golden hour",
+  "mentions": [ { "kind": "character", "id": "ana" }, { "kind": "product", "id": "coat" }, { "kind": "location", "id": "chalet" } ],
+  "model": "fal/nano-banana-2-edit" }
+```
+
+- The Studio sends each mention's reference images in that order (a character's face and full body, a product's main photo and spare detail views, a location's photos), tells the model in the prompt which image is which, and puts each character's locked description in. Write the names in the prompt the way they are listed; the composer's tokens (`@[character:ana]`) work too and are replaced by the names.
+- Every mention needs at least one reference slot, and attached images keep theirs. Nano Banana 2 Edit and the default (no `model` named) take 8, Seedream Edit 10; a text-only model takes none. With mentions and a `candidateCount` above 1 and no `model`, the Studio uses `fal/nano-banana-2-edit`, which takes 8 and renders up to 4. Too many is refused before anything is spent (`400`, `code: "too_many_references"`): remove a mention or pick a model that takes more. A model that cannot take references at all (the Vertex entries) is `400` `model_takes_no_references`. A mention without any reference image is `422` `mention_without_reference`; a slug the organization cannot use is `404` `input_not_found`.
+- References change no price: the image costs what it costs without them.
+- `characterSlug` still works alone and as before; sent together with `mentions`, that character comes first.
+- Each image keeps its recipe: `metadata.recipe` on the asset holds the prompt as sent, the mentions and the settings, so the same image can be made again. Over HTTP, `GET /api/v1/jobs/{jobId}` and `GET /api/v1/projects/{projectId}/assets` return it with the asset.
 
 ## Character replacement (images and video)
 
