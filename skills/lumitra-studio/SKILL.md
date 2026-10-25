@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.14.0"
+  version: "0.15.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -123,10 +123,13 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_social_list_projects` | The company's Lumitra Social projects (one Instagram account each) and the one this brand went to last. Free. |
 | `studio_composition_send_to_social` | Send the rendered post to Lumitra Social as a draft or scheduled post. Creates a post the planner will publish: confirm project, caption and time with the user first. |
 | `studio_delete_campaign` | Delete a campaign with its shot list and decisions; its images stay in the asset library. The person confirms it in the chat, see "Deleting needs the person's yes". Refused while a shot is still rendering. |
+| `studio_prompts_list` | The organization's saved prompts ("My prompts"), shared by every project: `prompt` (mention tokens such as `@[character:bruno]` included), `mentions`, `settings`, `title`, `usageCount`, `savedByMe`. Newest first or `sort: "most-used"`; page with `limit` and `nextOffset`. Free. |
+| `studio_prompts_save` | Keep a prompt that worked: the text with optional `mentions` and `settings`, or `assetId` to save the recipe that image was made with (anything you also send replaces the copied part). `title` defaults to its first words. The same prompt, mentions and settings saved again return the first one with `alreadySaved: true`. Free. |
+| `studio_prompts_delete` | Delete a saved prompt for everyone in the organization; images made with it stay. The person confirms it in the chat, see "Deleting needs the person's yes". |
 
 ### Deleting needs the person's yes
 
-`studio_delete_project`, `studio_delete_asset` and `studio_delete_campaign` never delete on your word alone. The tool reads what would be removed and asks the person through your client's confirmation dialog; on a yes it deletes, on a no it returns `declined: true` and nothing happens. If your client has no such dialog, the tool returns `confirmationRequired: true` with a `summary` and a `confirmationToken` and deletes nothing. Then show the `summary` to the person exactly as written, ask them to confirm in the chat, and only after they explicitly say yes call the same tool again with the `confirmationToken`. Never confirm on their behalf, never ask for a yes before you have shown the summary, and never reuse a token: it works once, expires after ten minutes, and stops working if the project or campaign changed since it was issued (you then get a fresh summary to show).
+`studio_delete_project`, `studio_delete_asset`, `studio_delete_campaign` and `studio_prompts_delete` never delete on your word alone. The tool reads what would be removed and asks the person through your client's confirmation dialog; on a yes it deletes, on a no it returns `declined: true` and nothing happens. If your client has no such dialog, the tool returns `confirmationRequired: true` with a `summary` and a `confirmationToken` and deletes nothing. Then show the `summary` to the person exactly as written, ask them to confirm in the chat, and only after they explicitly say yes call the same tool again with the `confirmationToken`. Never confirm on their behalf, never ask for a yes before you have shown the summary, and never reuse a token: it works once, expires after ten minutes, and stops working if the project, campaign or prompt changed since it was issued (you then get a fresh summary to show).
 
 Rule of thumb: anything that creates a job is asynchronous. Submit, then poll with `studio_get_job` or `studio_get_run` every 5 seconds until the status is terminal. Do not poll faster than that.
 
