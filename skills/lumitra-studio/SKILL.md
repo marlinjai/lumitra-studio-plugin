@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.13.0"
+  version: "0.14.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -85,6 +85,7 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_find_animations` | Search the 678 Meshy presets `studio_rig_3d` can apply by words ("sword slash", "dance"). Free and local. |
 | `studio_get_job` | Poll a `jobId` until terminal. Returns status, `costUsd`, `errorMessage`, `resultAsset.url`. |
 | `studio_list_characters` / `studio_get_character` | Find a character you can use and its reference images (you need the `full-body` or `face` one for video swaps). The list holds the organization's own characters and the ones another organization shared with everyone, marked `owned: false`; when both use the same slug, yours is the one listed and used. A shared character is readable and castable, never editable (an upload, edit or delete answers `403`). For a character you own, a reference `url` is a direct image URL. For a shared one it is a Studio address: pass it unchanged as an image input to any Studio tool and the Studio resolves it when the job runs, but it is not a public image URL, and it stops working the moment the owner stops sharing. |
+| `studio_prompt_enhance` | Rewrite a short prompt into a richer one before you generate: subject, setting, light, lens and composition (for `target: "video"` also the camera movement and the action over the shot), in the prompt's own language, without changing what it asks for. Args: `prompt`, `target` (`image`, the default, or `video`), optional `mentions`, `model` (the image or video model you will render with), `brandSlug`, `brandMode`. A character, product or location goes into the prompt as a token, `@[character:<slug>]`, `@[product:<slug>]` or `@[location:<slug>]`, and every token must also be listed in `mentions` as `{ kind, id: <slug> }`; the answer `{ prompt, mentions }` keeps each token exactly once, so pass both on unchanged. Free: nothing is charged and no job is created. Limited per API key over a few minutes and per organization per day; past either it answers `429` with a sentence saying when to try again: wait that long, never loop. It generates nothing; call `studio_generate_image` with the result. |
 | `studio_create_character` | Register a character row: `name`, `slug`, `descriptorPrompt`, `likenessRightsConfirmed: true` (see "The likeness confirmation"), optional `negativePrompt`, `defaultModel`. Does not generate images. |
 | `studio_mint_character` | Run the 7-view identity sheet for a description and freeze the views as references on the character. The one-call path for "make me a consistent character". Needs `likenessRightsConfirmed: true`, and refuses before spending anything without it. |
 | `studio_create_brand` | Register a brand: `name`, `slug`, optional `stylePrefix`, `context`. |
@@ -321,6 +322,7 @@ An image-to-video model given a start frame and an end frame that disagree inven
 
 | Operation | Typical cost |
 |---|---|
+| Enhance a prompt (`studio_prompt_enhance`) | free |
 | One image (the default model) | about $0.06, and up to $0.18 when the default route falls back to its second provider; about 40 s |
 | Character mint (7 views) | about $0.84 |
 | Still swap (one edit) | about $0.12 |
