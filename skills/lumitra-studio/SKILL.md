@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.16.0"
+  version: "0.17.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -161,19 +161,21 @@ HTTP contract behind both:
 ```
 POST {base}/api/generate
 { "brandSlug": "my-brand", "brandMode": "illustration", "prompt": "a happy red dinosaur waving",
-  "settings": { "aspectRatio": "1:1", "model": "kie/nano-banana-2" } }
+  "settings": { "aspectRatio": "1:1", "model": "route/nano-banana-2" } }
 -> 200 { "jobId": "<uuid>", "kind": "generate_image", "candidates": { "requested": 1, "rendered": 1 } }
 -> 404 { "error": "Brand 'my-brand' not found. Create the brand first (...), or leave brandSlug out to generate without a brand.",
          "code": "input_not_found", "input": "brandSlug" }
 
 GET {base}/api/v1/jobs/{jobId}
--> { "job": { "status": "succeeded", "costUsd": 0.064, "model": "kie/nano-banana-2", "errorMessage": null },
+-> { "job": { "status": "succeeded", "costUsd": 0.12, "model": "fal/nano-banana-2-edit", "errorMessage": null },
      "resultAsset": { "url": "https://...signed...png" } }
 ```
 
 `brandSlug`, `brandMode`, `characterSlug` and `projectId` are all optional in the body; only `prompt` is needed. `settings` also accepts `imageSize`, `candidateCount`, `seed`, `temperature`. `model` is optional; the Studio picks its default text-to-image model when omitted.
 
-`candidateCount` (1 to 4) asks for several candidates of one prompt, but not every model takes a count: most KIE image models render one image whatever is asked, a `route/...` model runs on KIE first and so usually renders one too (its fal fallback may render up to four), and fal models render at most four. The submit answer always says what will happen in `candidates: { requested, rendered, mayRender? }`, and adds a `notice` sentence when fewer images will be made than were asked for. Relay that notice instead of promising the count you sent, and for more candidates send the request again or pick a model that takes a count. Only rendered images are charged.
+**People never go to KIE.** A request that carries a person (a character or its reference images, a virtual try-on, a face or figure swap, or any uploaded or referenced image or video, brand reference images included, since the Studio cannot tell whether they show someone) is never sent to KIE.ai, which offers no data processing agreement. On an automatic entry (`route/...`) it skips KIE and runs on the route's fal model only, priced as the fal model: that is why the example above, a brand with reference images, comes back from `fal/nano-banana-2-edit`. A model pinned to KIE (`kie/...`) is refused for such a request with `code: "person_model_not_available"` and a sentence naming the fal entry and the automatic entry to use instead; nothing is admitted or spent. In a workflow the whole run is refused up front when any node that carries a person is pinned to KIE. Use `route/...` or `fal/...` models for character and person work; KIE entries stay fine for text-only prompts and for images the Studio rendered without a person (a product or a scene from a prompt).
+
+`candidateCount` (1 to 4) asks for several candidates of one prompt, but not every model takes a count: most KIE image models render one image whatever is asked, a `route/...` model runs on KIE first and so usually renders one too (its fal fallback may render up to four; a request that carries a person runs on the fal model alone and renders what it renders), and fal models render at most four. The submit answer always says what will happen in `candidates: { requested, rendered, mayRender? }`, and adds a `notice` sentence when fewer images will be made than were asked for. Relay that notice instead of promising the count you sent, and for more candidates send the request again or pick a model that takes a count. Only rendered images are charged.
 
 ## Character minting (7-view identity sheet)
 
@@ -303,13 +305,14 @@ A run whose estimated cost meets or exceeds $10 needs explicit confirmation: wit
 
 ## Character references on a clip (holding identity)
 
-A clip made from one start keyframe drifts: the video model sees only the first frame, so a face and hair slowly change over four seconds. Kling O3 (`route/kling-o3`, or pinned `kie/kling-o3-image-to-video`; the fal fallback is `fal/kling-o3-pro-reference-to-video`) also takes **character references**: several photos of each person in the shot, which it holds the identity to for the whole clip. A minted character's frozen views (front, three-quarter, back, full body) are exactly that.
+A clip made from one start keyframe drifts: the video model sees only the first frame, so a face and hair slowly change over four seconds. Kling O3 (`route/kling-o3`, or pinned to fal as `fal/kling-o3-pro-reference-to-video`) also takes **character references**: several photos of each person in the shot, which it holds the identity to for the whole clip. A minted character's frozen views (front, three-quarter, back, full body) are exactly that.
 
 - On a workflow, wire each photo into the image-to-video node's `reference` port (op `{ type: "connect", source, target, port: "reference" }`), in order, each character's **frontal view first**. References never count as the start or end frame: those stay on the `image` port.
 - 2 to 4 photos per character, up to 3 characters (fal: 7 photos in all). With more than one character, say which one each photo shows: `{ type: "setNodeSetting", id, key: "referenceElements", value: { "<sourceNodeId>": 2 } }` (a photo not named is character 1).
 - A model without the capability refuses reference wires; the run refuses a character with one photo or too many, before anything is spent. References do not change the clip's price; the run's estimate shows it as usual.
 - The prompt names the references as `@Element1`, `@Element2`; a prompt that does not gets one sentence in front tying them to the people in the start frame.
-- To compare, `kie/gemini-omni-flash-1-1-reference-to-video` (Gemini Omni 1.1 Flash in its reference mode) takes the same wiring with 1 to 6 character photos in all and no end frame. KIE does not lock the first frame in this mode: the start frame goes in as reference image 1 and the prompt names it the exact scene and first frame, so the clip follows it closely but may not start on it pixel for pixel. Use Kling O3 when the first frame must be exact.
+- Character references carry a person, so such a clip never runs on KIE: `route/kling-o3` runs it on `fal/kling-o3-pro-reference-to-video`, which takes references at 1080p only (a 720p clip with references is refused, before anything is spent, with what to change), and the pinned `kie/kling-o3-image-to-video` is refused for it.
+- To compare, `kie/gemini-omni-flash-1-1-reference-to-video` (Gemini Omni 1.1 Flash in its reference mode) takes the same wiring with 1 to 6 character photos in all and no end frame. KIE does not lock the first frame in this mode: the start frame goes in as reference image 1 and the prompt names it the exact scene and first frame, so the clip follows it closely but may not start on it pixel for pixel. Use Kling O3 when the first frame must be exact. It runs on KIE, so while Studio keeps people off KIE it is refused for character references like every other `kie/` model; it can be compared only once that rule is lifted.
 - Inline definitions (studio_run_workflow with a DAG) take `referenceImageUrls` plus `referenceElementIndexes` (the 0-based character of each photo, ascending, e.g. `[0, 0, 0, 1, 1]`).
 
 ## Continuity check before a clip with a start and an end frame
