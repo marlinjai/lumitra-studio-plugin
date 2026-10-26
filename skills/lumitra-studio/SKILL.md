@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.17.0"
+  version: "0.18.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -301,7 +301,9 @@ Running a recipe always executes the FROZEN definition, never the live authoring
 
 ## Spend confirmation
 
-A run whose estimated cost meets or exceeds $10 needs explicit confirmation: without it, `studio_run_workflow` / `studio_run_published` refuse with `confirmation_required` and no run is created, nothing is spent. Re-send the SAME request with `confirm: true` to proceed. This is a hard stop, not a warning: always tell the user the estimate and get a go-ahead before adding `confirm: true` yourself, the same rule the "Cost expectations" section below already asks for on any batch over 20 images.
+A run whose estimated cost meets or exceeds $10 needs explicit confirmation: without it, `studio_run_workflow` / `studio_run_published` refuse with `confirmation_required` (`reason: "threshold"`) and no run is created, nothing is spent. Re-send the SAME request with `confirm: true` to proceed. This is a hard stop, not a warning: always tell the user the estimate and get a go-ahead before adding `confirm: true` yourself, the same rule the "Cost expectations" section below already asks for on any batch over 20 images.
+
+A run with a video-to-video or enhance node is priced by a clip length the Studio measures on the server, so it is confirmed at ANY amount: it refuses with `confirmation_required` and `reason: "measured_length"`, carrying the `estimate`. Tell the user `estimate.totalUsd`, and resend the same request with `confirm: true` only after they agree. A source clip the Studio cannot measure is refused with `422` `source_length_unknown` (naming the `nodeId`) before anything is spent; Studio never prices a guessed length. A job is never charged more than the price it was shown and held at; a text model is quoted at the most one call of it can be held at, so its price is a maximum.
 
 ## Character references on a clip (holding identity)
 
