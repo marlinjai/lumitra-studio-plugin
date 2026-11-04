@@ -1,11 +1,11 @@
 ---
 name: lumitra-studio
-description: Generate brand-consistent images and video through Lumitra Studio (studio.lumitra.co). Batch prompts to images, mint characters as 7-view identity sheets, create brands with reference images, replace a person in an image or video clip with a cast character (routed by mode, analyzed before any spend, honest about what the still-swap route cannot preserve), and run published recipes (a workflow plus automatic follow-up like character creation). Use when the user wants bulk image generation, a consistent recurring character, branded visuals, AI b-roll, a person replaced in a video clip, or to run a named recipe by slug. Works through the studio_* MCP tools or the HTTP API with LUMITRA_STUDIO_API_KEY.
+description: Generate brand-consistent images and video through Lumitra Studio (studio.lumitra.co). Batch prompts to images, mint characters as seven-view identity sheets (front, both sides, back) with an overview picture, create brands with reference images, replace a person in an image or video clip with a cast character (routed by mode, analyzed before any spend, honest about what the still-swap route cannot preserve), and run published recipes (a workflow plus automatic follow-up like character creation). Use when the user wants bulk image generation, a consistent recurring character, branded visuals, AI b-roll, a person replaced in a video clip, or to run a named recipe by slug. Works through the studio_* MCP tools or the HTTP API with LUMITRA_STUDIO_API_KEY.
 license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.18.2"
+  version: "0.19.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -87,7 +87,7 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | `studio_list_characters` / `studio_get_character` | Find a character you can use and its reference images (you need the `full-body` or `face` one for video swaps). The list holds the organization's own characters and the ones another organization shared with everyone, marked `owned: false`; when both use the same slug, yours is the one listed and used. A shared character is readable and castable, never editable (an upload, edit or delete answers `403`). For a character you own, a reference `url` is a direct image URL. For a shared one it is a Studio address: pass it unchanged as an image input to any Studio tool and the Studio resolves it when the job runs, but it is not a public image URL, and it stops working the moment the owner stops sharing. |
 | `studio_prompt_enhance` | Rewrite a short prompt into a richer one before you generate: subject, setting, light, lens and composition (for `target: "video"` also the camera movement and the action over the shot), in the prompt's own language, without changing what it asks for. Args: `prompt`, `target` (`image`, the default, or `video`), optional `mentions`, `model` (the image or video model you will render with), `brandSlug`, `brandMode`. A character, product or location goes into the prompt as a token, `@[character:<slug>]`, `@[product:<slug>]` or `@[location:<slug>]`, and every token must also be listed in `mentions` as `{ kind, id: <slug> }`; the answer `{ prompt, mentions }` keeps each token exactly once, so pass both on unchanged. Free: nothing is charged and no job is created. Limited per API key over a few minutes and per organization per day; past either it answers `429` with a sentence saying when to try again: wait that long, never loop. It generates nothing; call `studio_generate_image` with the result. |
 | `studio_create_character` | Register a character row: `name`, `slug`, `descriptorPrompt`, `likenessRightsConfirmed: true` (see "The likeness confirmation"), optional `negativePrompt`, `defaultModel`. Does not generate images. |
-| `studio_mint_character` | Run the 7-view identity sheet for a description and freeze the views as references on the character. The one-call path for "make me a consistent character". Needs `likenessRightsConfirmed: true`, and refuses before spending anything without it. |
+| `studio_mint_character` | Run the seven-view identity sheet (plus its overview picture) for a description and freeze the views as references on the character. The one-call path for "make me a consistent character". Needs `likenessRightsConfirmed: true`, and refuses before spending anything without it. |
 | `studio_create_brand` | Register a brand: `name`, `slug`, optional `stylePrefix`, `context`. |
 | `studio_upload_brand_reference` | Attach a reference image (file or URL) with a `category` and `label` to a brand's library. |
 | `studio_run_workflow` | Execute an inline workflow definition (`projectId`, `definition`, optional `params`). Returns `runId`. |
@@ -177,9 +177,11 @@ GET {base}/api/v1/jobs/{jobId}
 
 `candidateCount` (1 to 4) asks for several candidates of one prompt, but not every model takes a count: most KIE image models render one image whatever is asked, a `route/...` model runs on KIE first and so usually renders one too (its fal fallback may render up to four; a request that carries a person runs on the fal model alone and renders what it renders), and fal models render at most four. The submit answer always says what will happen in `candidates: { requested, rendered, mayRender? }`, and adds a `notice` sentence when fewer images will be made than were asked for. Relay that notice instead of promising the count you sent, and for more candidates send the request again or pick a model that takes a count. Only rendered images are charged.
 
-## Character minting (7-view identity sheet)
+## Character minting (seven-view identity sheet)
 
-A minted character is a `seed` face plus six edit views pinned to that seed: `three-quarter`, `profile`, `full-body`, `close-up`, `lighting-warm`, `lighting-cool`. Together with the seed `face` that is the 7-category reference set (use these exact category names; they drive reference ranking in try-on and casting). Once frozen, every generation that references the character reuses the same identity.
+A minted character is a `seed` face plus six edit views: `full-body` (front, head to toe), `three-quarter-left` (turned 45 degrees toward screen-left, the left edge of the image), `profile-left` (strict profile facing screen-left), `profile-right`, `three-quarter-right`, and `back` (head to toe from behind, no face; edited from the seed AND the front full body, in that order). Together with the seed `face` that is the 7-category reference set (use these exact category names; they drive reference ranking in try-on and casting). Each mint also makes one `overview` picture of all six angles at 4K, for people only: it is never a model reference, and no tool picks it. It is a preview and may be imperfect (about one in three comes out with a figure cut off or a column too many); its owner can make it again on the character page. Characters minted before November 2026 carry the older set (`three-quarter`, `profile`, `full-body`, `close-up`, `lighting-warm`, `lighting-cool`) and keep working.
+
+The `back` view is never chosen automatically: it shows no face, so sent into a front-facing shot it turns the person round. Pass it by name only when the person is seen from behind.
 
 ### The likeness confirmation (required on every mint path)
 
@@ -195,14 +197,14 @@ Preferred path: `studio_mint_character` with `{ projectId, name, slug, descripti
 
 Manual path (when you want to inspect views before freezing):
 
-1. `studio_run_workflow` with the character-sheet definition (seed node: text-to-image on `fal/nano-banana-2`; six `image-edit` nodes on `fal/nano-banana-2-edit` whose `inputImages` reference the seed).
-2. Review the seven URLs with the user. If the face is wrong, re-run; do not freeze views from a rejected face. Ask for the likeness confirmation here at the latest (better before step 1, so nothing is generated for a character that cannot be minted).
+1. `studio_run_workflow` with the character-sheet definition (seed node: text-to-image on `fal/nano-banana-2`; six `image-edit` nodes on `fal/nano-banana-2-edit` whose `inputImages` reference the seed, the back view taking `[seed, full body]`; one overview `image-edit` at `imageSize: "4K"`, aspect ratio 21:9).
+2. Review the seven views and the overview with the user. If the face is wrong, re-run; do not freeze views from a rejected face. Ask for the likeness confirmation here at the latest (better before step 1, so nothing is generated for a character that cannot be minted).
 3. `studio_create_character` `{ name, slug, descriptorPrompt, likenessRightsConfirmed: true, negativePrompt? }`. Over plain HTTP that is `POST /api/characters` with the same body; without the field it answers `422` and creates nothing.
-4. Upload each approved view: `POST /api/characters/{slug}/references/upload` (multipart `file`, `category` in `face|three-quarter|profile|full-body|close-up|lighting-warm|lighting-cool`, `label`).
+4. Upload each approved view: `POST /api/characters/{slug}/references/upload` (multipart `file`, `category` in `face|full-body|three-quarter-left|profile-left|profile-right|three-quarter-right|back|overview`, `label`).
 
 Wardrobe variants (workwear, evening wear): one ad-hoc `image-edit` node on the `full-body` reference with a prompt like "change ONLY the clothing to ..., keep face, body and pose identical". Upload the result as an extra `full-body` reference with a descriptive label.
 
-Expect about $0.84 per mint (7 images at about $0.12 each) for an organization on prepaid credits without a subscription; a run's estimate says the exact figure before anything is spent.
+Expect about $1.08 per mint (7 images at about $0.12 each and the 4K overview at about $0.24) for an organization on prepaid credits without a subscription; a run's estimate says the exact figure before anything is spent.
 
 ## Brands and references
 
@@ -332,7 +334,7 @@ An image-to-video model given a start frame and an end frame that disagree inven
 |---|---|
 | Enhance a prompt (`studio_prompt_enhance`) | free |
 | One image (the default model) | about $0.06, and up to $0.18 when the default route falls back to its second provider; about 40 s |
-| Character mint (7 views) | about $0.84 |
+| Character mint (7 views and the overview) | about $1.08 |
 | Still swap (one edit) | about $0.12 |
 | 5 s image-to-video | about $0.53 (Kling 2.5) to $0.93 (Seedance) |
 | One video shot, one take (swap plus animate) | about $1.05 |
