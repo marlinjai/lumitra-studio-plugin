@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs LUMITRA_STUDIO_API_KEY in the environment. The MCP path needs Node 20+ (npx). The script path needs bash, curl and jq. All generation calls spend money on the key.
 metadata:
   author: Lumitra
-  version: "0.20.0"
+  version: "0.21.0"
   homepage: https://studio.lumitra.co
 ---
 
@@ -79,7 +79,7 @@ Stop there and ask what to make next. Minting a character, a batch or any video 
 | Tool | Use it to |
 |---|---|
 | `studio_list_projects` | Resolve the `projectId` you need for characters, workflows and runs. Call once, cache the id. |
-| `studio_generate_image` | One prompt to one image job. Args: `prompt` (the only required one), optional `brandSlug` (a brand of the organization, or leave it out for an image without a brand), `brandMode`, `characterSlug`, `mentions` (several characters, products and locations of the organization in one image, see below), `projectId` (where the image is filed), `aspectRatio`, `model`, `imageSize`, `seed`, `candidateCount`, `wait`. Waits by default and returns `jobId`, `url`, `urls`, `costUsd` and `candidates: { requested, rendered, mayRender? }`; with `wait: false` it returns the `jobId` at once. Some models render one image whatever `candidateCount` asks for: the result then also carries a `notice` saying how many will be made and why, which you pass on to the user. Only rendered images are charged. |
+| `studio_generate_image` | One prompt to one image job. Args: `prompt` (the only required one), optional `brandSlug` (a brand of the organization, or leave it out for an image without a brand), `brandMode`, `characterSlug`, `mentions` (several characters, products and locations of the organization in one image, see below), `projectId` (where the image is filed), `aspectRatio`, `model`, `imageSize`, `seed`, `candidateCount`, `variety`, `wait`. Waits by default and returns `jobId`, `url`, `urls`, `costUsd` and `candidates: { requested, rendered, mayRender? }`; with `wait: false` it returns the `jobId` at once. Some models render one image whatever `candidateCount` asks for: the result then also carries a `notice` saying how many will be made and why, which you pass on to the user. Only rendered images are charged. With `candidateCount` above 1, `variety: "varied"` gives each image its own pose and camera line so the candidates differ (on fal models with no attached image to edit); the default `"same"` renders the prompt as written for each, which gives near-identical images. |
 | `studio_generate_3d` | One prompt, or one image (`imageUrl`), to one 3D model (a textured GLB mesh) through 3D AI Studio. Optional `model` (text: Tripo 3.1, Hunyuan Rapid or Pro; image: TRELLIS.2, Tripo 3.1), `options` quality flags that each change the price, `projectId`. Waits by default (one to five minutes) and returns the GLB `url` and `costUsd` (what the model cost the organization; the quality flags decide it). |
 | `studio_rig_3d` | Rig a humanoid Model3D and animate it (Meshy on fal): `projectId`, `meshAssetId` (the `assetId` `studio_generate_3d` returns), up to 10 `animations` as preset names or ids, optional `heightMeters`. Walk and run clips always come with the rig. Waits by default (one to three minutes) and returns `rigUrl`, `clips` (name and url each) and `costUsd` (a price per rig plus a price per preset you ask for). Humanoids only. |
 | `studio_find_animations` | Search the 678 Meshy presets `studio_rig_3d` can apply by words ("sword slash", "dance"). Free and local. |
@@ -171,7 +171,7 @@ GET {base}/api/v1/jobs/{jobId}
      "resultAsset": { "url": "https://...signed...png" } }
 ```
 
-`brandSlug`, `brandMode`, `characterSlug` and `projectId` are all optional in the body; only `prompt` is needed. `settings` also accepts `imageSize`, `candidateCount`, `seed`, `temperature`. `model` is optional; the Studio picks its default text-to-image model when omitted.
+`brandSlug`, `brandMode`, `characterSlug` and `projectId` are all optional in the body; only `prompt` is needed. `settings` also accepts `imageSize`, `candidateCount`, `variety` (`"varied"` or `"same"`, the default), `seed`, `temperature`. `model` is optional; the Studio picks its default text-to-image model when omitted.
 
 **People never go to KIE.** A request that carries a person (a character or its reference images, a virtual try-on, a face or figure swap, or any uploaded or referenced image or video, brand reference images included, since the Studio cannot tell whether they show someone) is never sent to KIE.ai, which offers no data processing agreement. On an automatic entry (`route/...`) it skips KIE and runs on the route's fal model only, priced as the fal model: that is why the example above, a brand with reference images, comes back from `fal/nano-banana-2-edit`. A model pinned to KIE (`kie/...`) is refused for such a request with `code: "person_model_not_available"` and a sentence naming the fal entry and the automatic entry to use instead; nothing is admitted or spent. In a workflow the whole run is refused up front when any node that carries a person is pinned to KIE. Use `route/...` or `fal/...` models for character and person work; KIE entries stay fine for text-only prompts and for images the Studio rendered without a person (a product or a scene from a prompt).
 
